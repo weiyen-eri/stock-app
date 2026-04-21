@@ -2,13 +2,12 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.2.0
+      版本: v1.2.2
       最後更新: 2026-04-21
       修改重點:
-      1. UI 邏輯優化：新增「銀行關鍵字」自動辨識，動態調整輸入框提示。
-      2. 視覺強化：針對台股習慣調整損益顏色 (正紅負綠)。
-      3. 交互優化：送出資料後加入更直觀的震動反饋感（CSS 動畫）。
-      4. 代碼結構整頓，為下一步「自動庫存計算」預留數據接口。
+      1. 智能判斷：自動將銀行關鍵字的「買入/賣出」轉換為「存入/提領」傳送至雲端。
+      2. 數據綁定：優化資產總覽欄位的變數對接，確保顯示正常。
+      3. UI 反饋：增加輸入合法性檢查與送出前的邏輯校正。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -52,35 +51,31 @@
             transform: scale(0.96);
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
-
-        /* 銀行模式下的輸入框特效 */
         .input-bank-mode {
             background-color: #eef6ff !important;
             border-color: #0066cc !important;
         }
 
-        /* 隱藏捲軸 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading-shimmer { animation: pulse 1.5s infinite; }
+
         ::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="pb-32">
 
-    <!-- 頂部狀態欄裝飾 -->
     <div class="fixed top-0 w-full bg-[#0066cc] h-[var(--safe-top)] z-[60]"></div>
 
-    <!-- Header -->
     <header class="bg-[#0066cc] text-white p-5 sticky top-[var(--safe-top)] z-50 flex justify-between items-center rounded-b-[30px] shadow-lg">
         <button onclick="fetchData()" class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-full btn-press">
             <span id="refresh-icon">🔄</span>
         </button>
         <div class="text-center">
             <h1 class="text-sm opacity-80">我的總資產</h1>
-            <p id="total-assets" class="text-2xl font-black tracking-tight">$ --</p>
+            <p id="total-assets" class="text-2xl font-black tracking-tight loading-shimmer">$ 載入中</p>
         </div>
         <button onclick="toggleAddModal()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full text-[#0066cc] shadow-lg btn-press">
             <span class="text-2xl font-bold">＋</span>
@@ -90,7 +85,7 @@
     <main class="max-w-md mx-auto p-4 space-y-5">
         
         <!-- 資產損益快報 -->
-        <section class="glass-card p-6 grid grid-cols-2 gap-4 animate-in" id="summary-section">
+        <section class="glass-card p-6 grid grid-cols-2 gap-4">
             <div class="border-r border-gray-100">
                 <p class="text-[11px] text-gray-400 uppercase font-bold tracking-wider">庫存市值</p>
                 <p id="stock-market-value" class="text-lg font-bold text-gray-800">--</p>
@@ -102,31 +97,25 @@
         </section>
 
         <!-- 銀行餘額 -->
-        <section class="bg-gradient-to-br from-blue-600 to-blue-700 rounded-[24px] p-6 text-white shadow-blue-200 shadow-xl flex justify-between items-center animate-in" style="animation-delay: 0.1s">
+        <section class="bg-gradient-to-br from-blue-600 to-blue-700 rounded-[24px] p-6 text-white shadow-blue-200 shadow-xl flex justify-between items-center">
             <div>
                 <p class="text-xs opacity-70 font-medium">可用現金 (銀行)</p>
                 <p id="bank-balance" class="text-2xl font-black mt-1">$ --</p>
             </div>
             <div class="text-right">
-                <p class="text-[10px] bg-white/20 px-2 py-1 rounded-md inline-block font-mono" id="sync-time">WAITING</p>
+                <p class="text-[10px] bg-white/20 px-2 py-1 rounded-md inline-block font-mono" id="sync-time">SYNCING...</p>
             </div>
         </section>
 
         <!-- Tab 導航 -->
-        <div class="flex bg-white/50 p-1 rounded-2xl animate-in" style="animation-delay: 0.2s">
+        <div class="flex bg-white/50 p-1 rounded-2xl">
             <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-3 text-sm font-black rounded-xl transition-all tab-active">資產配置</button>
             <button onclick="switchTab('transactions')" id="tab-transactions" class="flex-1 py-3 text-sm font-black rounded-xl transition-all text-gray-400">交易流水</button>
         </div>
 
         <!-- 內容區域 -->
-        <div id="content-portfolio" class="space-y-3 animate-in" style="animation-delay: 0.3s">
-            <div class="text-center py-20">
-                <div class="inline-block animate-spin mb-4">⏳</div>
-                <p class="text-gray-400 text-sm">正在整理您的資產數據...</p>
-            </div>
-        </div>
-
-        <div id="content-transactions" class="hidden space-y-3 animate-in"></div>
+        <div id="content-portfolio" class="space-y-3"></div>
+        <div id="content-transactions" class="hidden space-y-3"></div>
 
     </main>
 
@@ -148,7 +137,7 @@
 
     <!-- 新增交易彈窗 -->
     <div id="addModal" class="fixed inset-0 bg-black/40 z-[100] hidden flex items-end justify-center backdrop-blur-sm transition-all">
-        <div class="bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl transform translate-y-0">
+        <div class="bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl">
             <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
             <div class="flex justify-between items-center mb-8">
                 <h2 class="text-2xl font-black text-gray-800">新增紀錄</h2>
@@ -156,13 +145,11 @@
             </div>
             
             <div class="space-y-6">
-                <!-- 類型切換 -->
                 <div class="flex gap-2 p-1.5 bg-gray-100 rounded-2xl">
                     <button id="type-buy" onclick="setType('買入')" class="flex-1 py-3 rounded-xl bg-white shadow-sm font-bold text-blue-600 transition-all">買入/存入</button>
                     <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-3 rounded-xl font-bold text-gray-400 transition-all">賣出/提領</button>
                 </div>
 
-                <!-- 輸入欄位 -->
                 <div class="space-y-4">
                     <div>
                         <label class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">標的名稱或代號</label>
@@ -193,13 +180,13 @@
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         let currentType = "買入";
 
-        window.onload = () => {
-            fetchData();
-        };
+        window.onload = fetchData;
 
         async function fetchData() {
             const refreshIcon = document.getElementById('refresh-icon');
+            const totalAssetsEl = document.getElementById('total-assets');
             refreshIcon.classList.add('animate-spin');
+            totalAssetsEl.classList.add('loading-shimmer');
             
             try {
                 const response = await fetch(`${API_URL}?t=${new Date().getTime()}`);
@@ -207,45 +194,54 @@
                 if (result.status === "success") {
                     renderDashboard(result.data);
                     document.getElementById('sync-time').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    totalAssetsEl.classList.remove('loading-shimmer');
                 }
             } catch (e) {
                 console.error("Fetch Error:", e);
+                totalAssetsEl.innerText = "連線失敗";
             } finally {
                 setTimeout(() => refreshIcon.classList.remove('animate-spin'), 500);
             }
         }
 
         function renderDashboard(data) {
+            // 這些欄位必須與你的 Google Sheets Summary 頁面回傳的 JSON Key 對應
             const s = data.summary || {};
             const t = data.transactions || [];
 
             const bank = Number(s.BankBalance) || 0;
             const market = Number(s.StockMarketValue) || 0;
+            const profit = Number(s.TotalProfit) || 0;
             const total = bank + market;
+
+            // 1. 更新總資產
             document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
             
+            // 2. 更新庫存市值
             document.getElementById('stock-market-value').innerText = market.toLocaleString();
             
-            const profit = Number(s.TotalProfit) || 0;
+            // 3. 更新未實現損益
             const profitEl = document.getElementById('total-profit');
-            profitEl.innerText = `${profit > 0 ? '+' : ''}${profit.toLocaleString()}`;
-            // 台股配色：正數紅，負數綠
+            profitEl.innerText = `${profit >= 0 ? '+' : ''}${profit.toLocaleString()}`;
             profitEl.style.color = profit >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
             
+            // 4. 更新銀行餘額
             document.getElementById('bank-balance').innerText = `$ ${bank.toLocaleString()}`;
 
+            // 更新交易流水
             const tContainer = document.getElementById('content-transactions');
             if (t.length > 0) {
                 tContainer.innerHTML = t.reverse().map(item => {
-                    const isOut = item[1].includes('賣') || item[1].includes('提');
+                    const type = item[1] || "";
+                    const isOut = type.includes('賣') || type.includes('提');
                     return `
                     <div class="glass-card p-4 flex justify-between items-center">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xs font-black">
-                                ${item[1][0]}
+                                ${type[0] || '無'}
                             </div>
                             <div>
-                                <p class="text-[10px] text-gray-400 font-bold">${item[0].split(' ')[0]}</p>
+                                <p class="text-[10px] text-gray-400 font-bold">${String(item[0]).split(' ')[0]}</p>
                                 <p class="font-black text-gray-800">${item[2]}</p>
                             </div>
                         </div>
@@ -255,14 +251,13 @@
                             </p>
                             <p class="text-[10px] text-gray-400 font-bold">${item[3]} 單位</p>
                         </div>
-                    </div>
-                `}).join('');
-            } else {
-                tContainer.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">目前沒有交易紀錄</div>`;
+                    </div>`;
+                }).join('');
             }
 
+            // 更新資產占比
             const pContainer = document.getElementById('content-portfolio');
-            const marketPct = Math.round(market/total*100) || 0;
+            const marketPct = total > 0 ? Math.round(market/total*100) : 0;
             const bankPct = 100 - marketPct;
             
             pContainer.innerHTML = `
@@ -272,8 +267,8 @@
                         <span class="text-[10px] text-gray-400 font-bold">即時分析</span>
                     </div>
                     <div class="flex h-3 rounded-full overflow-hidden mb-6 bg-gray-100">
-                        <div style="width: ${marketPct}%" class="bg-blue-600"></div>
-                        <div style="width: ${bankPct}%" class="bg-blue-300"></div>
+                        <div style="width: ${marketPct}%" class="bg-blue-600 transition-all duration-1000"></div>
+                        <div style="width: ${bankPct}%" class="bg-blue-300 transition-all duration-1000"></div>
                     </div>
                     <div class="space-y-4">
                         <div class="flex justify-between items-center text-sm">
@@ -290,7 +285,7 @@
         }
 
         function checkBankMode(val) {
-            const bankKeywords = ['銀行', '存款', '現金', 'bank', 'cash'];
+            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰'];
             const isBank = bankKeywords.some(k => val.includes(k));
             const inputSymbol = document.getElementById('input-symbol');
             const inputQty = document.getElementById('input-qty');
@@ -310,7 +305,7 @@
         async function submitToSheet() {
             const btn = document.getElementById('btn-submit');
             const submitText = document.getElementById('submit-text');
-            const symbol = document.getElementById('input-symbol').value;
+            const symbol = document.getElementById('input-symbol').value.trim();
             const qty = document.getElementById('input-qty').value;
             const price = document.getElementById('input-price').value;
 
@@ -319,11 +314,22 @@
             btn.disabled = true;
             submitText.innerText = "傳送中...";
 
+            // --- 智能類型判斷核心 ---
+            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰'];
+            const isBankRecord = bankKeywords.some(k => symbol.includes(k));
+            let finalType = currentType;
+
+            if (isBankRecord) {
+                if (currentType === "買入") finalType = "存入";
+                if (currentType === "賣出") finalType = "提領";
+            }
+            // -----------------------
+
             try {
-                await fetch(API_URL, {
+                const response = await fetch(API_URL, {
                     method: 'POST',
                     body: JSON.stringify({
-                        type: currentType,
+                        type: finalType,
                         symbol: symbol,
                         quantity: qty,
                         price: price,
@@ -331,20 +337,26 @@
                     })
                 });
 
-                setTimeout(() => {
+                const res = await response.json();
+                
+                if (res.status === "success") {
                     toggleAddModal();
                     fetchData();
-                    btn.disabled = false;
-                    submitText.innerText = "確認並儲存到雲端";
+                    // 清空輸入
                     document.getElementById('input-symbol').value = "";
                     document.getElementById('input-qty').value = "";
                     document.getElementById('input-price').value = "";
                     document.getElementById('input-symbol').classList.remove('input-bank-mode');
-                }, 1000);
+                } else {
+                    throw new Error("API 回傳失敗");
+                }
 
             } catch (e) {
+                console.error(e);
+                submitText.innerText = "錯誤，請重試";
+            } finally {
                 btn.disabled = false;
-                submitText.innerText = "出錯了，請重試";
+                submitText.innerText = "確認並儲存到雲端";
             }
         }
 

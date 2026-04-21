@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.3.5 Pro (Vertical Fix)
+      版本: v1.3.7 Pro (Leading Zero Fix)
       更新內容:
-      1. 相容垂直 Summary 結構 (A:項目, B:數值)。
-      2. 強化數值解析，支援貨幣符號與千分位撇號。
-      3. 修正歷史紀錄的正負號顯示邏輯。
+      1. 修復 ETF 代號開頭為 0 (如 00878) 的顯示問題。
+      2. 優化數值解析與總額計算邏輯。
+      3. 強化與 Google Sheets 垂直 Summary 的對接。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -191,7 +191,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
                         <label class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">標的名稱 / 銀行關鍵字</label>
-                        <input type="text" id="input-symbol" oninput="handleSmartInput(this.value)" placeholder="如: 2330, 0050, 中信存款" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
+                        <input type="text" id="input-symbol" oninput="handleSmartInput(this.value)" placeholder="如: 00878, 2330, 中信存款" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
                     </div>
                     <div>
                         <label id="label-qty" class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">成交數量</label>
@@ -237,7 +237,6 @@
             if (cached) renderDashboard(JSON.parse(cached));
         }
 
-        // 安全解析數字：過濾掉 , $ 空白等字元
         function parseSafeNumber(val) {
             if (typeof val === 'number') return val;
             if (!val) return 0;
@@ -268,7 +267,6 @@
             const s = data.summary || {};
             const t = data.transactions || [];
 
-            // 抓取垂直 Summary 的 Key
             const bank = parseSafeNumber(s["BankBalance"] || s["可用現金"] || s["銀行餘額"]);
             const market = parseSafeNumber(s["StockMarketValue"] || s["庫存市值"] || s["股票市值"]);
             const profit = parseSafeNumber(s["TotalProfit"] || s["未實現損益"] || s["累計損益"]);
@@ -300,7 +298,11 @@
             }
             container.innerHTML = transactions.slice().reverse().map(item => {
                 const typeText = String(item[1]);
-                const symbol = String(item[2]);
+                let symbol = String(item[2]);
+                const quantity = parseSafeNumber(item[3]);
+                const price = parseSafeNumber(item[4]);
+                const totalAmount = quantity * price;
+
                 const isOut = typeText.includes('賣') || typeText.includes('提');
                 const isBank = ['銀','存','提','現'].some(k => symbol.includes(k));
 
@@ -316,8 +318,10 @@
                         </div>
                     </div>
                     <div class="text-right">
-                        <p class="font-black tabular-nums ${isOut ? 'text-red-500' : 'text-slate-800'}">${isOut?'-':'+'}${parseSafeNumber(item[4]).toLocaleString()}</p>
-                        <p class="text-[10px] text-slate-400 font-bold">${typeText} ${item[3]} 單位</p>
+                        <p class="font-black tabular-nums ${isOut ? 'text-red-500' : 'text-slate-800'}">
+                            ${isOut?'-':'+'}${totalAmount.toLocaleString()}
+                        </p>
+                        <p class="text-[10px] text-slate-400 font-bold">${typeText} ${quantity.toLocaleString()} 單位</p>
                     </div>
                 </div>`;
             }).join('');

@@ -3,116 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>我的個人助理</title>
+    <title>我的投資帳本</title>
     
-    <!-- PWA 必要設定：讓網頁「加入主畫面」後像 App -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="個人助手">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            /* 針對 iPhone 17 的安全區域設定 */
-            --safe-area-top: env(safe-area-inset-top);
-            --safe-area-bottom: env(safe-area-inset-bottom);
+            --primary-blue: #0066cc;
+            --bg-gray: #f4f7f9;
+            --safe-top: env(safe-area-inset-top);
         }
 
         body {
-            background: linear-gradient(135deg, #1e1e2f 0%, #2d3436 100%);
-            min-height: 100vh;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding-top: var(--safe-area-top);
-            padding-bottom: var(--safe-area-bottom);
+            background-color: var(--bg-gray);
+            font-family: -apple-system, "Noto Sans TC", sans-serif;
+            padding-top: var(--safe-top);
         }
 
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
+        .header-blue {
+            background-color: var(--primary-blue);
         }
 
-        .active-scale:active {
-            transform: scale(0.95);
-            transition: transform 0.1s;
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .text-profit { color: #eb4d4b; } /* 紅色代表獲利 (台股慣例) */
+        .text-loss { color: #2ecc71; }   /* 綠色代表虧損 (台股慣例) */
+
+        /* 底部導覽列 */
+        .tab-bar {
+            background: white;
+            border-top: 1px solid #ddd;
+            padding-bottom: env(safe-area-inset-bottom);
         }
     </style>
 </head>
-<body class="flex flex-col items-center p-6">
+<body class="pb-24">
 
-    <!-- 頂部狀態列 -->
-    <header class="w-full max-w-md flex justify-between items-center mb-8 mt-4">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight">個人助手</h1>
-            <p class="text-sm text-gray-400" id="date-display">2026年4月20日</p>
-        </div>
-        <div class="w-12 h-12 glass flex items-center justify-center">
-            <span class="text-xl">✨</span>
+    <!-- 頂部導航 (參考 IMG_1167) -->
+    <header class="header-blue text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <button class="text-xl">⚙️</button>
+            <h1 class="text-lg font-bold">投資總覽</h1>
+            <button class="text-2xl" onclick="toggleAddModal()">＋</button>
         </div>
     </header>
 
-    <!-- 主要功能卡片 -->
-    <main class="w-full max-w-md space-y-4">
+    <main class="max-w-md mx-auto p-4 space-y-4">
         
-        <!-- 動態訊息區 -->
-        <section class="glass p-6 shadow-xl">
-            <h2 class="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-2">今日摘要</h2>
-            <p class="text-lg leading-relaxed" id="greeting">正在載入您的 iPhone 17 個人資料...</p>
-        </section>
-
-        <!-- 快速功能按鈕網格 (響應式：手機2欄) -->
-        <div class="grid grid-cols-2 gap-4">
-            <button class="glass p-4 active-scale flex flex-col items-center space-y-2">
-                <span class="text-2xl">📝</span>
-                <span class="text-sm font-medium">快速筆記</span>
-            </button>
-            <button class="glass p-4 active-scale flex flex-col items-center space-y-2">
-                <span class="text-2xl">📊</span>
-                <span class="text-sm font-medium">數據分析</span>
-            </button>
-            <button class="glass p-4 active-scale flex flex-col items-center space-y-2">
-                <span class="text-2xl">🏠</span>
-                <span class="text-sm font-medium">智慧家居</span>
-            </button>
-            <button class="glass p-4 active-scale flex flex-col items-center space-y-2">
-                <span class="text-2xl">⚙️</span>
-                <span class="text-sm font-medium">設定</span>
-            </button>
-        </div>
-
-        <!-- 底部控制區 -->
-        <section class="glass p-6 mt-8">
-            <div class="flex items-center space-x-3 bg-white/5 rounded-full px-4 py-2">
-                <span class="text-blue-400">●</span>
-                <input type="text" placeholder="輸入指令..." class="bg-transparent border-none outline-none flex-1 text-sm text-white placeholder-gray-500">
+        <!-- 總損益卡片 (參考 IMG_1167 頂部) -->
+        <section class="card p-4 grid grid-cols-3 gap-2 text-center">
+            <div>
+                <p class="text-xs text-gray-500">投資總額</p>
+                <p class="font-bold text-sm">4,791,727</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">總損益</p>
+                <p class="font-bold text-sm text-profit">+3,596,740</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">年化/報酬率</p>
+                <p class="font-bold text-sm text-profit">75.06%</p>
             </div>
         </section>
-        
+
+        <!-- 分類標籤 (參考截圖下方切換列) -->
+        <div class="flex border-b border-gray-300 text-sm">
+            <button class="flex-1 py-2 border-b-2 border-blue-600 text-blue-600 font-bold">庫存損益</button>
+            <button class="flex-1 py-2 text-gray-500">帳戶交易</button>
+            <button class="flex-1 py-2 text-gray-500">實現損益</button>
+        </div>
+
+        <!-- 庫存清單 (參考 IMG_1169) -->
+        <section class="space-y-3" id="portfolio-list">
+            <!-- 個股卡片範例 -->
+            <div class="card p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg">2330 台積電</span>
+                        <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded ml-2">現價 1025.0</span>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400">今日損益</p>
+                        <p class="text-sm text-loss">-5.00 (-0.25%)</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm border-t pt-2 mt-2">
+                    <div>
+                        <p class="text-gray-500">庫存 / 市值</p>
+                        <p class="font-medium">50 / 101,250</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-gray-500">損益試算</p>
+                        <p class="font-medium text-profit">+30,351</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4 opacity-75">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="font-bold text-lg">00752 中信中國50</span>
+                        <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded ml-2">現價 25.06</span>
+                    </div>
+                    <div class="text-right text-profit text-sm">+0.36 (1.46%)</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm border-t pt-2 mt-2">
+                    <div>
+                        <p class="text-gray-500">庫存 / 市值</p>
+                        <p class="font-medium">13,000 / 325,780</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-gray-500">損益試算</p>
+                        <p class="font-medium text-loss">-106,134</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
-    <footer class="mt-auto py-6 text-gray-500 text-xs">
-        <p>優化於 iPhone 17 (2026) | 響應式佈局</p>
-    </footer>
+    <!-- 底部功能列 -->
+    <nav class="fixed bottom-0 w-full max-w-md left-1/2 -translate-x-1/2 tab-bar flex justify-around p-2 z-40">
+        <button class="flex flex-col items-center text-blue-600">
+            <span class="text-xl">🏠</span>
+            <span class="text-xs">資產</span>
+        </button>
+        <button class="flex flex-col items-center text-gray-400">
+            <span class="text-xl">📅</span>
+            <span class="text-xs">明細</span>
+        </button>
+        <button class="flex flex-col items-center text-gray-400">
+            <span class="text-xl">📈</span>
+            <span class="text-xs">行情</span>
+        </button>
+    </nav>
+
+    <!-- 新增交易彈窗 (初步結構) -->
+    <div id="addModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end">
+        <div class="bg-white w-full rounded-t-3xl p-6 animate-slide-up">
+            <div class="flex justify-between mb-4">
+                <h3 class="text-xl font-bold">新增交易</h3>
+                <button onclick="toggleAddModal()" class="text-gray-400">關閉</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" placeholder="股票代號/名稱" class="w-full border p-3 rounded-lg">
+                <div class="flex gap-2">
+                    <input type="number" placeholder="數量" class="flex-1 border p-3 rounded-lg">
+                    <input type="number" placeholder="單價" class="flex-1 border p-3 rounded-lg">
+                </div>
+                <button class="w-full header-blue text-white py-3 rounded-xl font-bold">確認新增</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        // 更新時間
-        const updateDate = () => {
-            const now = new Date();
-            const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-            document.getElementById('date-display').innerText = now.toLocaleDateString('zh-TW', options);
-            
-            const hours = now.getHours();
-            let greet = "午安";
-            if(hours < 12) greet = "早安";
-            if(hours > 18) greet = "晚安";
-            document.getElementById('greeting').innerText = `${greet}！今天有 3 項待辦事項需要處理。`;
-        };
+        function toggleAddModal() {
+            const modal = document.getElementById('addModal');
+            modal.classList.toggle('hidden');
+        }
 
-        updateDate();
+        // 未來可以在這裡加入計算邏輯，例如：
+        // 總損益 = 庫存市值 - 原始成本
     </script>
 </body>
 </html>

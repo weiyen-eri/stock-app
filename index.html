@@ -2,16 +2,15 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.2.2
-      最後更新: 2026-04-21
-      修改重點:
-      1. 智能判斷：自動將銀行關鍵字的「買入/賣出」轉換為「存入/提領」傳送至雲端。
-      2. 數據綁定：優化資產總覽欄位的變數對接，確保顯示正常。
-      3. UI 反饋：增加輸入合法性檢查與送出前的邏輯校正。
+      版本: v1.3.5 Pro (Vertical Fix)
+      更新內容:
+      1. 相容垂直 Summary 結構 (A:項目, B:數值)。
+      2. 強化數值解析，支援貨幣符號與千分位撇號。
+      3. 修正歷史紀錄的正負號顯示邏輯。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>我的投資帳本 Pro</title>
+    <title>投資帳本 Pro+</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,47 +19,62 @@
     <style>
         :root {
             --primary-blue: #0066cc;
-            --bg-gray: #f2f4f7;
+            --bg-gray: #f8fafc;
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
-            --stock-up: #eb4d4b; /* 台股紅 */
-            --stock-down: #2ecc71; /* 台股綠 */
+            --stock-up: #ef4444; 
+            --stock-down: #22c55e;
         }
 
         body {
             background-color: var(--bg-gray);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             padding-top: var(--safe-top);
             -webkit-tap-highlight-color: transparent;
+            color: #1e293b;
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-radius: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.5);
         }
 
         .tab-active {
             color: var(--primary-blue);
-            border-bottom: 3px solid var(--primary-blue);
+            position: relative;
+        }
+        .tab-active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 25%;
+            width: 50%;
+            height: 3px;
+            background: var(--primary-blue);
+            border-radius: 10px;
         }
 
-        .btn-press:active {
-            transform: scale(0.96);
+        .btn-press:active { transform: scale(0.96); }
+
+        .input-focus {
+            outline: none;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .input-focus:focus {
+            border-color: var(--primary-blue);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
         }
 
-        .input-bank-mode {
-            background-color: #eef6ff !important;
-            border-color: #0066cc !important;
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
         }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .loading-shimmer { animation: pulse 1.5s infinite; }
+        .modal-animate { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
         ::-webkit-scrollbar { display: none; }
     </style>
@@ -69,136 +83,182 @@
 
     <div class="fixed top-0 w-full bg-[#0066cc] h-[var(--safe-top)] z-[60]"></div>
 
-    <header class="bg-[#0066cc] text-white p-5 sticky top-[var(--safe-top)] z-50 flex justify-between items-center rounded-b-[30px] shadow-lg">
-        <button onclick="fetchData()" class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-full btn-press">
-            <span id="refresh-icon">🔄</span>
+    <header class="bg-[#0066cc] text-white px-6 py-4 sticky top-[var(--safe-top)] z-50 flex justify-between items-center rounded-b-[32px] shadow-lg">
+        <button onclick="fetchData()" class="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full btn-press">
+            <span id="refresh-icon" class="text-xl">↻</span>
         </button>
         <div class="text-center">
-            <h1 class="text-sm opacity-80">我的總資產</h1>
-            <p id="total-assets" class="text-2xl font-black tracking-tight loading-shimmer">$ 載入中</p>
+            <h1 class="text-[10px] uppercase tracking-[0.2em] opacity-70 font-bold">Total Net Worth</h1>
+            <p id="total-assets" class="text-2xl font-black tabular-nums tracking-tight">$ 0</p>
         </div>
-        <button onclick="toggleAddModal()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full text-[#0066cc] shadow-lg btn-press">
-            <span class="text-2xl font-bold">＋</span>
+        <button onclick="toggleAddModal()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full text-[#0066cc] shadow-xl btn-press">
+            <span class="text-2xl font-light">＋</span>
         </button>
     </header>
 
-    <main class="max-w-md mx-auto p-4 space-y-5">
+    <main class="max-w-md mx-auto p-4 space-y-4">
         
-        <!-- 資產損益快報 -->
-        <section class="glass-card p-6 grid grid-cols-2 gap-4">
-            <div class="border-r border-gray-100">
-                <p class="text-[11px] text-gray-400 uppercase font-bold tracking-wider">庫存市值</p>
-                <p id="stock-market-value" class="text-lg font-bold text-gray-800">--</p>
+        <!-- 資產彙整卡片 -->
+        <section class="glass-card p-6 flex items-center justify-between">
+            <div class="space-y-1">
+                <p class="text-[11px] text-slate-400 font-bold flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 庫存市值
+                </p>
+                <p id="stock-market-value" class="text-xl font-bold tracking-tight text-slate-700">--</p>
             </div>
-            <div>
-                <p class="text-[11px] text-gray-400 uppercase font-bold tracking-wider">未實現損益</p>
-                <p id="total-profit" class="text-lg font-bold">--</p>
-            </div>
-        </section>
-
-        <!-- 銀行餘額 -->
-        <section class="bg-gradient-to-br from-blue-600 to-blue-700 rounded-[24px] p-6 text-white shadow-blue-200 shadow-xl flex justify-between items-center">
-            <div>
-                <p class="text-xs opacity-70 font-medium">可用現金 (銀行)</p>
-                <p id="bank-balance" class="text-2xl font-black mt-1">$ --</p>
-            </div>
-            <div class="text-right">
-                <p class="text-[10px] bg-white/20 px-2 py-1 rounded-md inline-block font-mono" id="sync-time">SYNCING...</p>
+            <div class="h-10 w-[1px] bg-slate-100"></div>
+            <div class="space-y-1 text-right">
+                <p class="text-[11px] text-slate-400 font-bold">未實現損益</p>
+                <p id="total-profit" class="text-xl font-bold tracking-tight">--</p>
             </div>
         </section>
 
-        <!-- Tab 導航 -->
-        <div class="flex bg-white/50 p-1 rounded-2xl">
-            <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-3 text-sm font-black rounded-xl transition-all tab-active">資產配置</button>
-            <button onclick="switchTab('transactions')" id="tab-transactions" class="flex-1 py-3 text-sm font-black rounded-xl transition-all text-gray-400">交易流水</button>
+        <!-- 銀行餘額卡片 -->
+        <section class="bg-slate-900 rounded-[28px] p-6 text-white shadow-2xl relative overflow-hidden">
+            <div class="relative z-10 flex justify-between items-start">
+                <div>
+                    <p class="text-xs text-slate-400 font-medium mb-1">可用現金 (Liquid Cash)</p>
+                    <p id="bank-balance" class="text-3xl font-black tracking-tight tabular-nums">$ --</p>
+                </div>
+                <div class="bg-white/10 px-3 py-1 rounded-full backdrop-blur-md">
+                    <p class="text-[9px] font-mono tracking-tighter" id="sync-time">OFFLINE</p>
+                </div>
+            </div>
+            <div class="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl"></div>
+        </section>
+
+        <nav class="flex bg-white rounded-2xl p-1 shadow-sm border border-slate-100">
+            <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-3 text-xs font-bold transition-all tab-active">資產配置</button>
+            <button onclick="switchTab('transactions')" id="tab-transactions" class="flex-1 py-3 text-xs font-bold transition-all text-slate-400">歷史交易</button>
+        </nav>
+
+        <div id="content-portfolio" class="space-y-4">
+            <div class="glass-card p-6 flex flex-col items-center justify-center min-h-[200px]">
+                <div class="relative w-32 h-32 mb-6">
+                    <svg viewBox="0 0 36 36" class="w-full h-full transform -rotate-90">
+                        <circle cx="18" cy="18" r="16" fill="none" class="stroke-slate-100" stroke-width="3.5"></circle>
+                        <circle id="chart-market-circle" cx="18" cy="18" r="16" fill="none" stroke="#0066cc" stroke-width="3.5" stroke-dasharray="0 100" stroke-linecap="round" class="transition-all duration-1000"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold">股票比</span>
+                        <span id="chart-market-label" class="text-lg font-black text-slate-700">0%</span>
+                    </div>
+                </div>
+                <div class="w-full grid grid-cols-2 gap-4">
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 mb-1">股票投資</p>
+                        <p id="pct-stock" class="font-black text-blue-600">--%</p>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 mb-1">現金存款</p>
+                        <p id="pct-cash" class="font-black text-slate-600">--%</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- 內容區域 -->
-        <div id="content-portfolio" class="space-y-3"></div>
         <div id="content-transactions" class="hidden space-y-3"></div>
-
     </main>
 
-    <!-- 底部導覽欄 -->
-    <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-100 px-8 py-4 flex justify-around items-center z-40" style="padding-bottom: calc(12px + var(--safe-bottom))">
+    <footer class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-10 py-4 flex justify-around items-center z-40" style="padding-bottom: calc(12px + var(--safe-bottom))">
         <button class="flex flex-col items-center text-blue-600">
-            <span class="text-2xl">📊</span>
+            <span class="text-2xl">🏛️</span>
             <span class="text-[10px] font-bold mt-1">資產</span>
         </button>
-        <button class="flex flex-col items-center text-gray-300 opacity-50">
-            <span class="text-2xl">🔍</span>
+        <button onclick="showToast('分析功能開發中')" class="flex flex-col items-center text-slate-300">
+            <span class="text-2xl">📈</span>
             <span class="text-[10px] font-bold mt-1">分析</span>
         </button>
-        <button class="flex flex-col items-center text-gray-300 opacity-50">
-            <span class="text-2xl">👤</span>
+        <button onclick="showToast('設定功能開發中')" class="flex flex-col items-center text-slate-300">
+            <span class="text-2xl">⚙️</span>
             <span class="text-[10px] font-bold mt-1">設定</span>
         </button>
     </footer>
 
     <!-- 新增交易彈窗 -->
-    <div id="addModal" class="fixed inset-0 bg-black/40 z-[100] hidden flex items-end justify-center backdrop-blur-sm transition-all">
-        <div class="bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl">
-            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-2xl font-black text-gray-800">新增紀錄</h2>
-                <button onclick="toggleAddModal()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-400 font-bold">&times;</button>
+    <div id="addModal" class="fixed inset-0 bg-slate-900/60 z-[100] hidden flex items-end justify-center backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl modal-animate">
+            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8"></div>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black text-slate-800 tracking-tight">新增交易紀錄</h2>
+                <button onclick="toggleAddModal()" class="w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 font-bold">&times;</button>
             </div>
-            
-            <div class="space-y-6">
-                <div class="flex gap-2 p-1.5 bg-gray-100 rounded-2xl">
-                    <button id="type-buy" onclick="setType('買入')" class="flex-1 py-3 rounded-xl bg-white shadow-sm font-bold text-blue-600 transition-all">買入/存入</button>
-                    <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-3 rounded-xl font-bold text-gray-400 transition-all">賣出/提領</button>
+            <div class="space-y-5">
+                <div class="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                    <button id="type-buy" onclick="setType('買入')" class="flex-1 py-3 rounded-xl bg-white shadow-sm font-bold text-blue-600 transition-all">買入 / 存入</button>
+                    <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-3 rounded-xl font-bold text-slate-400 transition-all">賣出 / 提領</button>
                 </div>
-
-                <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">標的名稱 / 銀行關鍵字</label>
+                        <input type="text" id="input-symbol" oninput="handleSmartInput(this.value)" placeholder="如: 2330, 0050, 中信存款" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
+                    </div>
                     <div>
-                        <label class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">標的名稱或代號</label>
-                        <input type="text" id="input-symbol" oninput="checkBankMode(this.value)" placeholder="例如: 2330 或 銀行存款" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 transition-all font-bold">
+                        <label id="label-qty" class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">成交數量</label>
+                        <input type="number" id="input-qty" placeholder="1000" class="w-full bg-slate-50 p-4 rounded-2xl font-mono font-bold input-focus">
                     </div>
-                    
-                    <div class="flex gap-4">
-                        <div class="flex-1">
-                            <label id="label-qty" class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">數量 (單位)</label>
-                            <input type="number" id="input-qty" placeholder="1000" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-mono font-bold">
-                        </div>
-                        <div class="flex-1">
-                            <label id="label-price" class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">單價 / 總金額</label>
-                            <input type="number" id="input-price" placeholder="750" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-mono font-bold">
-                        </div>
+                    <div>
+                        <label id="label-price" class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">成交單價</label>
+                        <input type="number" id="input-price" placeholder="單價" class="w-full bg-slate-50 p-4 rounded-2xl font-mono font-bold input-focus">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">交易日期</label>
+                        <input type="date" id="input-date" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
                     </div>
                 </div>
-
-                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-5 rounded-[20px] font-black shadow-xl shadow-blue-100 btn-press flex justify-center items-center gap-3">
-                    <span id="submit-text">確認並儲存到雲端</span>
+                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-5 rounded-3xl font-black shadow-xl shadow-blue-200 btn-press">
+                    <span id="submit-text">儲存至雲端</span>
                 </button>
-                <div class="h-6"></div>
             </div>
+            <div class="h-10"></div>
         </div>
     </div>
+
+    <div id="toast" class="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
 
     <script>
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         let currentType = "買入";
+        let isSubmitting = false;
 
-        window.onload = fetchData;
+        window.onload = () => {
+            initDate();
+            loadCachedData();
+            fetchData();
+        };
+
+        function initDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('input-date').value = today;
+        }
+
+        function loadCachedData() {
+            const cached = localStorage.getItem('ledger_data');
+            if (cached) renderDashboard(JSON.parse(cached));
+        }
+
+        // 安全解析數字：過濾掉 , $ 空白等字元
+        function parseSafeNumber(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            const cleaned = String(val).replace(/[,$\s]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
 
         async function fetchData() {
             const refreshIcon = document.getElementById('refresh-icon');
-            const totalAssetsEl = document.getElementById('total-assets');
             refreshIcon.classList.add('animate-spin');
-            totalAssetsEl.classList.add('loading-shimmer');
-            
             try {
                 const response = await fetch(`${API_URL}?t=${new Date().getTime()}`);
                 const result = await response.json();
                 if (result.status === "success") {
+                    localStorage.setItem('ledger_data', JSON.stringify(result.data));
                     renderDashboard(result.data);
                     document.getElementById('sync-time').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    totalAssetsEl.classList.remove('loading-shimmer');
                 }
             } catch (e) {
-                console.error("Fetch Error:", e);
-                totalAssetsEl.innerText = "連線失敗";
+                showToast("連線失敗");
             } finally {
                 setTimeout(() => refreshIcon.classList.remove('animate-spin'), 500);
             }
@@ -208,180 +268,132 @@
             const s = data.summary || {};
             const t = data.transactions || [];
 
-            // 修正：對應 Summary 工作表中 A 欄名稱與 B 欄數值
-            // 請確保 Google Sheets 的 Summary 工作表 A 欄有這三個項目
-            const bank = Number(s["BankBalance"]) || 0;
-            const market = Number(s["StockMarketValue"]) || 0;
-            const profit = Number(s["TotalProfit"]) || 0;
+            // 抓取垂直 Summary 的 Key
+            const bank = parseSafeNumber(s["BankBalance"] || s["可用現金"] || s["銀行餘額"]);
+            const market = parseSafeNumber(s["StockMarketValue"] || s["庫存市值"] || s["股票市值"]);
+            const profit = parseSafeNumber(s["TotalProfit"] || s["未實現損益"] || s["累計損益"]);
+            
             const total = bank + market;
 
-            // 1. 更新總資產
             document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
-            
-            // 2. 更新庫存市值
-            document.getElementById('stock-market-value').innerText = market.toLocaleString();
-            
-            // 3. 更新未實現損益
+            document.getElementById('stock-market-value').innerText = `$ ${market.toLocaleString()}`;
+            document.getElementById('bank-balance').innerText = `$ ${bank.toLocaleString()}`;
+
             const profitEl = document.getElementById('total-profit');
             profitEl.innerText = `${profit >= 0 ? '+' : ''}${profit.toLocaleString()}`;
             profitEl.style.color = profit >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
-            
-            // 4. 更新銀行餘額
-            document.getElementById('bank-balance').innerText = `$ ${bank.toLocaleString()}`;
 
-            // 更新交易流水
-            const tContainer = document.getElementById('content-transactions');
-            if (t.length > 0) {
-                tContainer.innerHTML = t.slice().reverse().map(item => {
-                    const type = item[1] || "";
-                    const isOut = type.includes('賣') || type.includes('提');
-                    return `
-                    <div class="glass-card p-4 flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xs font-black">
-                                ${type[0] || '無'}
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 font-bold">${String(item[0]).split('T')[0]}</p>
-                                <p class="font-black text-gray-800">${item[2]}</p>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <p class="font-black ${isOut ? 'text-red-500' : 'text-gray-800'}">
-                                ${Number(item[4]).toLocaleString()}
-                            </p>
-                            <p class="text-[10px] text-gray-400 font-bold">${item[3]} 單位</p>
-                        </div>
-                    </div>`;
-                }).join('');
-            }
+            const marketPct = total > 0 ? Math.round((market / total) * 100) : 0;
+            document.getElementById('chart-market-label').innerText = `${marketPct}%`;
+            document.getElementById('chart-market-circle').style.strokeDasharray = `${marketPct} 100`;
+            document.getElementById('pct-stock').innerText = `${marketPct}%`;
+            document.getElementById('pct-cash').innerText = `${100 - marketPct}%`;
 
-            // 更新資產占比
-            const pContainer = document.getElementById('content-portfolio');
-            const marketPct = total > 0 ? Math.round(market/total*100) : 0;
-            const bankPct = 100 - marketPct;
-            
-            pContainer.innerHTML = `
-                <div class="glass-card p-5">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-black text-gray-800">資產占比</h3>
-                        <span class="text-[10px] text-gray-400 font-bold">即時分析</span>
-                    </div>
-                    <div class="flex h-3 rounded-full overflow-hidden mb-6 bg-gray-100">
-                        <div style="width: ${marketPct}%" class="bg-blue-600 transition-all duration-1000"></div>
-                        <div style="width: ${bankPct}%" class="bg-blue-300 transition-all duration-1000"></div>
-                    </div>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center text-sm">
-                            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-600"></div><span class="font-bold text-gray-600">股票市值</span></div>
-                            <span class="font-mono font-bold text-gray-800">${marketPct}%</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-300"></div><span class="font-bold text-gray-600">現金存款</span></div>
-                            <span class="font-mono font-bold text-gray-800">${bankPct}%</span>
-                        </div>
-                    </div>
-                </div>
-            `;
+            renderTransactions(t);
         }
 
-        function checkBankMode(val) {
-            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰', '存', '提'];
-            const isBank = bankKeywords.some(k => val.includes(k));
-            const inputSymbol = document.getElementById('input-symbol');
-            const inputQty = document.getElementById('input-qty');
-            
-            if (isBank) {
-                inputSymbol.classList.add('input-bank-mode');
-                inputQty.value = 1;
-                document.getElementById('label-qty').innerText = "數量 (預設 1)";
-                document.getElementById('label-price').innerText = "存提總額";
-            } else {
-                inputSymbol.classList.remove('input-bank-mode');
-                document.getElementById('label-qty').innerText = "數量 (單位)";
-                document.getElementById('label-price').innerText = "成交單價";
+        function renderTransactions(transactions) {
+            const container = document.getElementById('content-transactions');
+            if (!transactions || transactions.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">尚無資料</div>`;
+                return;
+            }
+            container.innerHTML = transactions.slice().reverse().map(item => {
+                const typeText = String(item[1]);
+                const symbol = String(item[2]);
+                const isOut = typeText.includes('賣') || typeText.includes('提');
+                const isBank = ['銀','存','提','現'].some(k => symbol.includes(k));
+
+                return `
+                <div class="glass-card p-4 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xl">
+                            ${isBank ? '🏦' : '📈'}
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-slate-400 font-bold">${String(item[0]).split(' ')[0]}</p>
+                            <p class="font-black text-slate-700">${symbol}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-black tabular-nums ${isOut ? 'text-red-500' : 'text-slate-800'}">${isOut?'-':'+'}${parseSafeNumber(item[4]).toLocaleString()}</p>
+                        <p class="text-[10px] text-slate-400 font-bold">${typeText} ${item[3]} 單位</p>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function handleSmartInput(val) {
+            const isBank = ['銀行','存款','現金','中信','台銀','國泰','提款'].some(k => val.includes(k));
+            document.getElementById('label-qty').innerText = isBank ? "數量 (預設 1)" : "成交數量";
+            document.getElementById('label-price').innerText = isBank ? "存提總金額" : "成交單價";
+            if(isBank && !document.getElementById('input-qty').value) {
+                document.getElementById('input-qty').value = 1;
             }
         }
 
         async function submitToSheet() {
-            const btn = document.getElementById('btn-submit');
-            const submitText = document.getElementById('submit-text');
+            if (isSubmitting) return;
             const symbol = document.getElementById('input-symbol').value.trim();
             const qty = document.getElementById('input-qty').value;
             const price = document.getElementById('input-price').value;
+            const date = document.getElementById('input-date').value;
 
-            if (!symbol || !qty || !price) return;
+            if (!symbol || !qty || !price) return showToast("請填寫完整資訊");
 
-            btn.disabled = true;
-            submitText.innerText = "傳送中...";
+            isSubmitting = true;
+            document.getElementById('submit-text').innerText = "儲存中...";
 
-            // --- 智能類型判斷核心 ---
-            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰'];
-            const isBankRecord = bankKeywords.some(k => symbol.includes(k));
+            const bankKeywords = ['銀行','存款','現金','中信','台銀','國泰','提款','存','提'];
+            const isBank = bankKeywords.some(k => symbol.includes(k));
             let finalType = currentType;
-
-            if (isBankRecord) {
-                if (currentType === "買入") finalType = "存入";
-                if (currentType === "賣出") finalType = "提領";
-            }
-            // -----------------------
+            if (isBank) finalType = (currentType === "買入") ? "存入" : "提領";
 
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     body: JSON.stringify({
-                        type: finalType,
-                        symbol: symbol,
-                        quantity: qty,
-                        price: price,
-                        fee: 0
+                        type: finalType, symbol, quantity: qty, price, date, fee: 0
                     })
                 });
-
                 const res = await response.json();
-                
                 if (res.status === "success") {
+                    showToast("成功儲存");
                     toggleAddModal();
                     fetchData();
-                    // 清空輸入
                     document.getElementById('input-symbol').value = "";
                     document.getElementById('input-qty').value = "";
                     document.getElementById('input-price').value = "";
-                    document.getElementById('input-symbol').classList.remove('input-bank-mode');
-                } else {
-                    // 如果 API 回傳 status 不是 success，則顯示錯誤
-                    console.error("API Error:", res.message);
-                    submitText.innerText = "API 回傳失敗";
                 }
-
             } catch (e) {
-                console.error("Fetch Error:", e);
-                submitText.innerText = "連線失敗，請重試";
+                showToast("連線失敗");
             } finally {
-                btn.disabled = false;
-                if (submitText.innerText !== "API 回傳失敗" && submitText.innerText !== "連線失敗，請重試") {
-                    submitText.innerText = "確認並儲存到雲端";
-                }
+                isSubmitting = false;
+                document.getElementById('submit-text').innerText = "儲存至雲端";
             }
-        }
-
-        function toggleAddModal() {
-            document.getElementById('addModal').classList.toggle('hidden');
         }
 
         function setType(type) {
             currentType = type;
             const isBuy = type === '買入';
-            document.getElementById('type-buy').className = `flex-1 py-3 rounded-xl font-bold transition-all ${isBuy ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'}`;
-            document.getElementById('type-sell').className = `flex-1 py-3 rounded-xl font-bold transition-all ${!isBuy ? 'bg-white shadow-sm text-red-600' : 'text-gray-400'}`;
+            document.getElementById('type-buy').className = `flex-1 py-3 rounded-xl font-bold transition-all ${isBuy ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`;
+            document.getElementById('type-sell').className = `flex-1 py-3 rounded-xl font-bold transition-all ${!isBuy ? 'bg-white shadow-sm text-red-500' : 'text-slate-400'}`;
         }
 
         function switchTab(tab) {
             const isPort = tab === 'portfolio';
             document.getElementById('content-portfolio').classList.toggle('hidden', !isPort);
             document.getElementById('content-transactions').classList.toggle('hidden', isPort);
-            document.getElementById('tab-portfolio').className = `flex-1 py-3 text-sm font-black rounded-xl transition-all ${isPort ? 'tab-active' : 'text-gray-400'}`;
-            document.getElementById('tab-transactions').className = `flex-1 py-3 text-sm font-black rounded-xl transition-all ${!isPort ? 'tab-active' : 'text-gray-400'}`;
+            document.getElementById('tab-portfolio').className = `flex-1 py-3 text-xs font-bold transition-all ${isPort ? 'tab-active text-blue-600' : 'text-slate-400'}`;
+            document.getElementById('tab-transactions').className = `flex-1 py-3 text-xs font-bold transition-all ${!isPort ? 'tab-active text-blue-600' : 'text-slate-400'}`;
+        }
+
+        function toggleAddModal() { document.getElementById('addModal').classList.toggle('hidden'); }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg; t.style.opacity = '1'; t.style.top = '60px';
+            setTimeout(() => { t.style.opacity = '0'; t.style.top = '10px'; }, 2500);
         }
     </script>
 </body>

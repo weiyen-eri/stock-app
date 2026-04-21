@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.3.7 Pro (Leading Zero Fix)
+      版本: v1.3.10 Pro (Localization & UI)
       更新內容:
-      1. 修復 ETF 代號開頭為 0 (如 00878) 的顯示問題。
-      2. 優化數值解析與總額計算邏輯。
-      3. 強化與 Google Sheets 垂直 Summary 的對接。
+      1. 語系中文化：Total Net Worth -> 資產總額, Liquid Cash -> 可用現金。
+      2. UI 標籤優化：將圖表中心與交易列表單位同步轉為中文。
+      3. 維持 v1.3.9 的美化比例與整數金額顯示。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -18,203 +18,205 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            --primary-blue: #0066cc;
-            --bg-gray: #f8fafc;
+            --primary-blue: #007aff;
+            --bg-gray: #f2f2f7;
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
-            --stock-up: #ef4444; 
-            --stock-down: #22c55e;
+            --stock-up: #ff3b30; 
+            --stock-down: #34c759;
         }
 
         body {
             background-color: var(--bg-gray);
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif;
             padding-top: var(--safe-top);
             -webkit-tap-highlight-color: transparent;
-            color: #1e293b;
+            color: #1c1c1e;
+            overflow-x: hidden;
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 24px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-radius: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.5);
         }
 
         .tab-active {
             color: var(--primary-blue);
-            position: relative;
-        }
-        .tab-active::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 25%;
-            width: 50%;
-            height: 3px;
-            background: var(--primary-blue);
-            border-radius: 10px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
         }
 
-        .btn-press:active { transform: scale(0.96); }
+        .btn-press:active { transform: scale(0.94); transition: 0.1s; }
 
         .input-focus {
             outline: none;
-            border: 2px solid transparent;
-            transition: all 0.2s;
+            border: 1.5px solid transparent;
+            transition: all 0.3s;
         }
         .input-focus:focus {
             border-color: var(--primary-blue);
             background: white;
-            box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
         }
 
         @keyframes slideUp {
-            from { transform: translateY(100%); }
-            to { transform: translateY(0); }
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
-        .modal-animate { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .modal-animate { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 
         ::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="pb-32">
 
-    <div class="fixed top-0 w-full bg-[#0066cc] h-[var(--safe-top)] z-[60]"></div>
-
-    <header class="bg-[#0066cc] text-white px-6 py-4 sticky top-[var(--safe-top)] z-50 flex justify-between items-center rounded-b-[32px] shadow-lg">
-        <button onclick="fetchData()" class="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full btn-press">
+    <!-- 頂部沉浸式 Header -->
+    <div class="fixed top-0 w-full bg-blue-600 h-[var(--safe-top)] z-[60]"></div>
+    <header class="bg-blue-600 text-white px-8 pt-4 pb-8 sticky top-[var(--safe-top)] z-50 flex justify-between items-center rounded-b-[40px] shadow-2xl border-b border-white/10">
+        <button onclick="fetchData()" class="w-11 h-11 flex items-center justify-center bg-white/15 rounded-2xl btn-press">
             <span id="refresh-icon" class="text-xl">↻</span>
         </button>
         <div class="text-center">
-            <h1 class="text-[10px] uppercase tracking-[0.2em] opacity-70 font-bold">Total Net Worth</h1>
-            <p id="total-assets" class="text-2xl font-black tabular-nums tracking-tight">$ 0</p>
+            <h1 class="text-[12px] uppercase tracking-[0.25em] opacity-60 font-black mb-1">資產總額</h1>
+            <p id="total-assets" class="text-3xl font-black tabular-nums tracking-tighter">$ 0</p>
         </div>
-        <button onclick="toggleAddModal()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full text-[#0066cc] shadow-xl btn-press">
-            <span class="text-2xl font-light">＋</span>
+        <button onclick="toggleAddModal()" class="w-11 h-11 flex items-center justify-center bg-white rounded-2xl text-blue-600 shadow-xl btn-press">
+            <span class="text-3xl font-light">＋</span>
         </button>
     </header>
 
-    <main class="max-w-md mx-auto p-4 space-y-4">
+    <main class="max-w-md mx-auto p-6 space-y-6">
         
-        <!-- 資產彙整卡片 -->
-        <section class="glass-card p-6 flex items-center justify-between">
-            <div class="space-y-1">
-                <p class="text-[11px] text-slate-400 font-bold flex items-center gap-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 庫存市值
+        <!-- 資產損益快報 -->
+        <section class="glass-card p-7 grid grid-cols-2 gap-6 relative overflow-hidden">
+            <div class="space-y-1 relative z-10">
+                <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span> 庫存市值
                 </p>
-                <p id="stock-market-value" class="text-xl font-bold tracking-tight text-slate-700">--</p>
+                <p id="stock-market-value" class="text-xl font-black tracking-tight text-slate-800">--</p>
             </div>
-            <div class="h-10 w-[1px] bg-slate-100"></div>
-            <div class="space-y-1 text-right">
-                <p class="text-[11px] text-slate-400 font-bold">未實現損益</p>
-                <p id="total-profit" class="text-xl font-bold tracking-tight">--</p>
+            <div class="space-y-1 text-right relative z-10">
+                <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">未實現損益</p>
+                <p id="total-profit" class="text-xl font-black tracking-tight">--</p>
             </div>
+            <!-- 背景修飾 -->
+            <div class="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl"></div>
         </section>
 
-        <!-- 銀行餘額卡片 -->
-        <section class="bg-slate-900 rounded-[28px] p-6 text-white shadow-2xl relative overflow-hidden">
-            <div class="relative z-10 flex justify-between items-start">
+        <!-- 銀行餘額精緻卡片 -->
+        <section class="bg-slate-900 rounded-[35px] p-8 text-white shadow-2xl relative overflow-hidden active:scale-[0.98] transition-all">
+            <div class="relative z-10 flex justify-between items-end">
                 <div>
-                    <p class="text-xs text-slate-400 font-medium mb-1">可用現金 (Liquid Cash)</p>
-                    <p id="bank-balance" class="text-3xl font-black tracking-tight tabular-nums">$ --</p>
+                    <p class="text-xs text-white/40 font-bold mb-1.5 uppercase tracking-widest">可用現金</p>
+                    <p id="bank-balance" class="text-4xl font-black tracking-tighter tabular-nums">$ --</p>
                 </div>
-                <div class="bg-white/10 px-3 py-1 rounded-full backdrop-blur-md">
-                    <p class="text-[9px] font-mono tracking-tighter" id="sync-time">OFFLINE</p>
+                <div class="text-right">
+                    <p class="text-[10px] bg-white/10 px-3 py-1 rounded-full font-mono text-white/60 tracking-tighter" id="sync-time">連線中...</p>
                 </div>
             </div>
-            <div class="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/20 rounded-full blur-[60px]"></div>
         </section>
 
-        <nav class="flex bg-white rounded-2xl p-1 shadow-sm border border-slate-100">
-            <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-3 text-xs font-bold transition-all tab-active">資產配置</button>
-            <button onclick="switchTab('transactions')" id="tab-transactions" class="flex-1 py-3 text-xs font-bold transition-all text-slate-400">歷史交易</button>
+        <!-- Tab 導航 -->
+        <nav class="flex bg-slate-200/50 rounded-[22px] p-1.5 border border-white">
+            <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-3 text-xs font-black transition-all rounded-[16px] tab-active">資產配置</button>
+            <button onclick="switchTab('transactions')" id="tab-transactions" class="flex-1 py-3 text-xs font-black transition-all rounded-[16px] text-slate-400">歷史明細</button>
         </nav>
 
-        <div id="content-portfolio" class="space-y-4">
-            <div class="glass-card p-6 flex flex-col items-center justify-center min-h-[200px]">
-                <div class="relative w-32 h-32 mb-6">
+        <!-- 資產配置內容 -->
+        <div id="content-portfolio" class="space-y-5">
+            <div class="glass-card p-8 flex flex-col items-center">
+                <div class="relative w-44 h-44 mb-8 flex items-center justify-center">
                     <svg viewBox="0 0 36 36" class="w-full h-full transform -rotate-90">
-                        <circle cx="18" cy="18" r="16" fill="none" class="stroke-slate-100" stroke-width="3.5"></circle>
-                        <circle id="chart-market-circle" cx="18" cy="18" r="16" fill="none" stroke="#0066cc" stroke-width="3.5" stroke-dasharray="0 100" stroke-linecap="round" class="transition-all duration-1000"></circle>
+                        <circle cx="18" cy="18" r="16" fill="none" class="stroke-slate-100" stroke-width="4"></circle>
+                        <circle id="chart-market-circle" cx="18" cy="18" r="16" fill="none" stroke="#007aff" stroke-width="4" stroke-dasharray="0 100" stroke-linecap="round" class="transition-all duration-1000"></circle>
                     </svg>
-                    <div class="absolute inset-0 flex items-center justify-center flex-col">
-                        <span class="text-[10px] text-slate-400 font-bold">股票比</span>
-                        <span id="chart-market-label" class="text-lg font-black text-slate-700">0%</span>
+                    <div class="absolute flex flex-col items-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">持股比例</span>
+                        <span id="chart-market-label" class="text-3xl font-black text-slate-800">0%</span>
                     </div>
                 </div>
                 <div class="w-full grid grid-cols-2 gap-4">
-                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <p class="text-[10px] font-bold text-slate-400 mb-1">股票投資</p>
-                        <p id="pct-stock" class="font-black text-blue-600">--%</p>
+                    <div class="bg-blue-50/50 p-5 rounded-3xl border border-blue-100/50">
+                        <p class="text-[10px] font-bold text-blue-500 mb-1 uppercase">股票市值</p>
+                        <p id="pct-stock" class="text-xl font-black text-blue-700">--%</p>
                     </div>
-                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <p class="text-[10px] font-bold text-slate-400 mb-1">現金存款</p>
-                        <p id="pct-cash" class="font-black text-slate-600">--%</p>
+                    <div class="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 mb-1 uppercase">現金比例</p>
+                        <p id="pct-cash" class="text-xl font-black text-slate-600">--%</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="content-transactions" class="hidden space-y-3"></div>
+        <!-- 歷史交易內容 -->
+        <div id="content-transactions" class="hidden space-y-4"></div>
+
     </main>
 
-    <footer class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-10 py-4 flex justify-around items-center z-40" style="padding-bottom: calc(12px + var(--safe-bottom))">
+    <!-- 底部 Tab Bar -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-12 py-5 flex justify-around items-center z-40" style="padding-bottom: calc(15px + var(--safe-bottom))">
         <button class="flex flex-col items-center text-blue-600">
-            <span class="text-2xl">🏛️</span>
-            <span class="text-[10px] font-bold mt-1">資產</span>
+            <span class="text-2xl mb-1">📊</span>
+            <span class="text-[10px] font-black uppercase tracking-tighter">資產</span>
         </button>
-        <button onclick="showToast('分析功能開發中')" class="flex flex-col items-center text-slate-300">
-            <span class="text-2xl">📈</span>
-            <span class="text-[10px] font-bold mt-1">分析</span>
+        <button class="flex flex-col items-center text-slate-300 opacity-60">
+            <span class="text-2xl mb-1">🗺️</span>
+            <span class="text-[10px] font-black uppercase tracking-tighter">分析</span>
         </button>
-        <button onclick="showToast('設定功能開發中')" class="flex flex-col items-center text-slate-300">
-            <span class="text-2xl">⚙️</span>
-            <span class="text-[10px] font-bold mt-1">設定</span>
+        <button class="flex flex-col items-center text-slate-300 opacity-60">
+            <span class="text-2xl mb-1">⚙️</span>
+            <span class="text-[10px] font-black uppercase tracking-tighter">設定</span>
         </button>
     </footer>
 
     <!-- 新增交易彈窗 -->
-    <div id="addModal" class="fixed inset-0 bg-slate-900/60 z-[100] hidden flex items-end justify-center backdrop-blur-sm">
-        <div class="bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl modal-animate">
-            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8"></div>
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-black text-slate-800 tracking-tight">新增交易紀錄</h2>
-                <button onclick="toggleAddModal()" class="w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 font-bold">&times;</button>
+    <div id="addModal" class="fixed inset-0 bg-slate-900/40 z-[100] hidden flex items-end justify-center backdrop-blur-md transition-all">
+        <div class="bg-white w-full max-w-md rounded-t-[45px] p-10 shadow-2xl modal-animate">
+            <div class="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-10"></div>
+            
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-black text-slate-800 tracking-tight">新增紀錄</h2>
+                <button onclick="toggleAddModal()" class="w-10 h-10 flex items-center justify-center bg-slate-50 rounded-full text-slate-300 font-bold text-2xl">&times;</button>
             </div>
-            <div class="space-y-5">
-                <div class="flex gap-2 p-1 bg-slate-100 rounded-2xl">
-                    <button id="type-buy" onclick="setType('買入')" class="flex-1 py-3 rounded-xl bg-white shadow-sm font-bold text-blue-600 transition-all">買入 / 存入</button>
-                    <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-3 rounded-xl font-bold text-slate-400 transition-all">賣出 / 提領</button>
+            
+            <div class="space-y-8">
+                <div class="flex gap-2 p-1.5 bg-slate-100 rounded-[20px]">
+                    <button id="type-buy" onclick="setType('買入')" class="flex-1 py-4 rounded-[16px] bg-white shadow-sm font-black text-blue-600 transition-all">買入 / 存入</button>
+                    <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-4 rounded-[16px] font-black text-slate-400 transition-all">賣出 / 提領</button>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+
+                <div class="grid grid-cols-2 gap-6">
                     <div class="col-span-2">
-                        <label class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">標的名稱 / 銀行關鍵字</label>
-                        <input type="text" id="input-symbol" oninput="handleSmartInput(this.value)" placeholder="如: 00878, 2330, 中信存款" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
+                        <label class="text-[11px] font-black text-slate-300 ml-2 mb-2 block uppercase tracking-widest">標的名稱或代號</label>
+                        <input type="text" id="input-symbol" oninput="handleSmartInput(this.value)" placeholder="如: 00878, 2330, 現金" class="w-full bg-slate-50 p-5 rounded-2xl font-bold input-focus text-lg">
                     </div>
                     <div>
-                        <label id="label-qty" class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">成交數量</label>
-                        <input type="number" id="input-qty" placeholder="1000" class="w-full bg-slate-50 p-4 rounded-2xl font-mono font-bold input-focus">
+                        <label id="label-qty" class="text-[11px] font-black text-slate-300 ml-2 mb-2 block uppercase tracking-widest">成交數量</label>
+                        <input type="number" id="input-qty" placeholder="1000" class="w-full bg-slate-50 p-5 rounded-2xl font-mono font-bold input-focus text-lg">
                     </div>
                     <div>
-                        <label id="label-price" class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">成交單價</label>
-                        <input type="number" id="input-price" placeholder="單價" class="w-full bg-slate-50 p-4 rounded-2xl font-mono font-bold input-focus">
+                        <label id="label-price" class="text-[11px] font-black text-slate-300 ml-2 mb-2 block uppercase tracking-widest">成交單價</label>
+                        <input type="number" id="input-price" placeholder="單價" class="w-full bg-slate-50 p-5 rounded-2xl font-mono font-bold input-focus text-lg">
                     </div>
                     <div class="col-span-2">
-                        <label class="text-[11px] font-bold text-slate-400 ml-2 mb-1 block">交易日期</label>
-                        <input type="date" id="input-date" class="w-full bg-slate-50 p-4 rounded-2xl font-bold input-focus">
+                        <label class="text-[11px] font-black text-slate-300 ml-2 mb-2 block uppercase tracking-widest">交易日期</label>
+                        <input type="date" id="input-date" class="w-full bg-slate-50 p-5 rounded-2xl font-bold input-focus text-lg">
                     </div>
                 </div>
-                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-5 rounded-3xl font-black shadow-xl shadow-blue-200 btn-press">
-                    <span id="submit-text">儲存至雲端</span>
+
+                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-6 rounded-[28px] font-black shadow-2xl shadow-blue-200 btn-press text-lg">
+                    <span id="submit-text">確認並儲存</span>
                 </button>
+                <div class="h-6"></div>
             </div>
-            <div class="h-10"></div>
         </div>
     </div>
 
-    <div id="toast" class="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
+    <!-- Toast 反饋系統 -->
+    <div id="toast" class="fixed top-14 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-8 py-4 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
 
     <script>
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
@@ -237,12 +239,13 @@
             if (cached) renderDashboard(JSON.parse(cached));
         }
 
-        function parseSafeNumber(val) {
-            if (typeof val === 'number') return val;
+        // 金額整數化解析
+        function parseSafeInt(val) {
+            if (typeof val === 'number') return Math.floor(val);
             if (!val) return 0;
             const cleaned = String(val).replace(/[,$\s]/g, '');
             const num = parseFloat(cleaned);
-            return isNaN(num) ? 0 : num;
+            return isNaN(num) ? 0 : Math.floor(num);
         }
 
         async function fetchData() {
@@ -254,12 +257,12 @@
                 if (result.status === "success") {
                     localStorage.setItem('ledger_data', JSON.stringify(result.data));
                     renderDashboard(result.data);
-                    document.getElementById('sync-time').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    document.getElementById('sync-time').innerText = "已更新";
                 }
             } catch (e) {
-                showToast("連線失敗");
+                showToast("同步失敗");
             } finally {
-                setTimeout(() => refreshIcon.classList.remove('animate-spin'), 500);
+                setTimeout(() => refreshIcon.classList.remove('animate-spin'), 600);
             }
         }
 
@@ -267,12 +270,13 @@
             const s = data.summary || {};
             const t = data.transactions || [];
 
-            const bank = parseSafeNumber(s["BankBalance"] || s["可用現金"] || s["銀行餘額"]);
-            const market = parseSafeNumber(s["StockMarketValue"] || s["庫存市值"] || s["股票市值"]);
-            const profit = parseSafeNumber(s["TotalProfit"] || s["未實現損益"] || s["累計損益"]);
+            const bank = parseSafeInt(s["BankBalance"] || s["可用現金"] || s["銀行餘額"]);
+            const market = parseSafeInt(s["StockMarketValue"] || s["庫存市值"] || s["股票市值"]);
+            const profit = parseSafeInt(s["TotalProfit"] || s["未實現損益"] || s["累計損益"]);
             
             const total = bank + market;
 
+            // 顯示整數並加撇號
             document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
             document.getElementById('stock-market-value').innerText = `$ ${market.toLocaleString()}`;
             document.getElementById('bank-balance').innerText = `$ ${bank.toLocaleString()}`;
@@ -293,35 +297,35 @@
         function renderTransactions(transactions) {
             const container = document.getElementById('content-transactions');
             if (!transactions || transactions.length === 0) {
-                container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">尚無資料</div>`;
+                container.innerHTML = `<div class="text-center py-20 text-slate-300 text-xs font-bold uppercase tracking-widest">暫無數據</div>`;
                 return;
             }
             container.innerHTML = transactions.slice().reverse().map(item => {
                 const typeText = String(item[1]);
-                let symbol = String(item[2]);
-                const quantity = parseSafeNumber(item[3]);
-                const price = parseSafeNumber(item[4]);
-                const totalAmount = quantity * price;
+                const symbol = String(item[2]);
+                const quantity = parseFloat(item[3]) || 0;
+                const price = parseFloat(item[4]) || 0;
+                const totalAmount = Math.floor(quantity * price);
 
                 const isOut = typeText.includes('賣') || typeText.includes('提');
                 const isBank = ['銀','存','提','現'].some(k => symbol.includes(k));
 
                 return `
-                <div class="glass-card p-4 flex justify-between items-center">
-                    <div class="flex items-center gap-3">
-                        <div class="w-11 h-11 rounded-2xl flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xl">
+                <div class="glass-card p-5 flex justify-between items-center active:scale-95 transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-3xl flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-2xl">
                             ${isBank ? '🏦' : '📈'}
                         </div>
                         <div>
-                            <p class="text-[10px] text-slate-400 font-bold">${String(item[0]).split(' ')[0]}</p>
-                            <p class="font-black text-slate-700">${symbol}</p>
+                            <p class="text-[10px] text-slate-300 font-black uppercase tracking-tighter mb-0.5">${String(item[0]).split(' ')[0]}</p>
+                            <p class="font-black text-slate-800">${symbol}</p>
                         </div>
                     </div>
                     <div class="text-right">
-                        <p class="font-black tabular-nums ${isOut ? 'text-red-500' : 'text-slate-800'}">
+                        <p class="font-black tabular-nums text-lg ${isOut ? 'text-red-500' : 'text-slate-800'}">
                             ${isOut?'-':'+'}${totalAmount.toLocaleString()}
                         </p>
-                        <p class="text-[10px] text-slate-400 font-bold">${typeText} ${quantity.toLocaleString()} 單位</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">${typeText} ${quantity.toLocaleString()} 單位</p>
                     </div>
                 </div>`;
             }).join('');
@@ -331,9 +335,7 @@
             const isBank = ['銀行','存款','現金','中信','台銀','國泰','提款'].some(k => val.includes(k));
             document.getElementById('label-qty').innerText = isBank ? "數量 (預設 1)" : "成交數量";
             document.getElementById('label-price').innerText = isBank ? "存提總金額" : "成交單價";
-            if(isBank && !document.getElementById('input-qty').value) {
-                document.getElementById('input-qty').value = 1;
-            }
+            if(isBank && !document.getElementById('input-qty').value) document.getElementById('input-qty').value = 1;
         }
 
         async function submitToSheet() {
@@ -343,10 +345,10 @@
             const price = document.getElementById('input-price').value;
             const date = document.getElementById('input-date').value;
 
-            if (!symbol || !qty || !price) return showToast("請填寫完整資訊");
+            if (!symbol || !qty || !price) return showToast("請完整填寫資訊");
 
             isSubmitting = true;
-            document.getElementById('submit-text').innerText = "儲存中...";
+            document.getElementById('submit-text').innerText = "處理中...";
 
             const bankKeywords = ['銀行','存款','現金','中信','台銀','國泰','提款','存','提'];
             const isBank = bankKeywords.some(k => symbol.includes(k));
@@ -356,48 +358,43 @@
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
-                    body: JSON.stringify({
-                        type: finalType, symbol, quantity: qty, price, date, fee: 0
-                    })
+                    body: JSON.stringify({ type: finalType, symbol, quantity: qty, price, date, fee: 0 })
                 });
                 const res = await response.json();
                 if (res.status === "success") {
-                    showToast("成功儲存");
-                    toggleAddModal();
-                    fetchData();
+                    showToast("紀錄成功儲存");
+                    toggleAddModal(); fetchData();
                     document.getElementById('input-symbol').value = "";
                     document.getElementById('input-qty').value = "";
                     document.getElementById('input-price').value = "";
                 }
-            } catch (e) {
-                showToast("連線失敗");
-            } finally {
+            } catch (e) { showToast("儲存失敗"); } finally {
                 isSubmitting = false;
-                document.getElementById('submit-text').innerText = "儲存至雲端";
+                document.getElementById('submit-text').innerText = "確認並儲存";
             }
         }
 
         function setType(type) {
             currentType = type;
             const isBuy = type === '買入';
-            document.getElementById('type-buy').className = `flex-1 py-3 rounded-xl font-bold transition-all ${isBuy ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`;
-            document.getElementById('type-sell').className = `flex-1 py-3 rounded-xl font-bold transition-all ${!isBuy ? 'bg-white shadow-sm text-red-500' : 'text-slate-400'}`;
+            document.getElementById('type-buy').className = `flex-1 py-4 rounded-[16px] font-black transition-all ${isBuy ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`;
+            document.getElementById('type-sell').className = `flex-1 py-4 rounded-[16px] font-black transition-all ${!isBuy ? 'bg-white shadow-sm text-red-500' : 'text-slate-400'}`;
         }
 
         function switchTab(tab) {
             const isPort = tab === 'portfolio';
             document.getElementById('content-portfolio').classList.toggle('hidden', !isPort);
             document.getElementById('content-transactions').classList.toggle('hidden', isPort);
-            document.getElementById('tab-portfolio').className = `flex-1 py-3 text-xs font-bold transition-all ${isPort ? 'tab-active text-blue-600' : 'text-slate-400'}`;
-            document.getElementById('tab-transactions').className = `flex-1 py-3 text-xs font-bold transition-all ${!isPort ? 'tab-active text-blue-600' : 'text-slate-400'}`;
+            document.getElementById('tab-portfolio').className = `flex-1 py-3 text-xs font-black transition-all rounded-[16px] ${isPort ? 'tab-active' : 'text-slate-400'}`;
+            document.getElementById('tab-transactions').className = `flex-1 py-3 text-xs font-black transition-all rounded-[16px] ${!isPort ? 'tab-active' : 'text-slate-400'}`;
         }
 
         function toggleAddModal() { document.getElementById('addModal').classList.toggle('hidden'); }
 
         function showToast(msg) {
             const t = document.getElementById('toast');
-            t.innerText = msg; t.style.opacity = '1'; t.style.top = '60px';
-            setTimeout(() => { t.style.opacity = '0'; t.style.top = '10px'; }, 2500);
+            t.innerText = msg; t.style.opacity = '1'; t.style.top = '100px';
+            setTimeout(() => { t.style.opacity = '0'; t.style.top = '50px'; }, 2500);
         }
     </script>
 </body>

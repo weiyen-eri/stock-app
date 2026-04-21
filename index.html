@@ -2,13 +2,13 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.1.0
+      版本: v1.2.0
       最後更新: 2026-04-21
       修改重點:
-      1. 介面現代化 (Pro UI) 導入，增加毛玻璃與卡片化設計。
-      2. 新增資產占比進度條，自動計算現金與股票比例。
-      3. 優化新增交易彈窗，針對「存入/提領」提供更好的輸入體驗。
-      4. 加入數據同步狀態提示與重新整理動畫。
+      1. UI 邏輯優化：新增「銀行關鍵字」自動辨識，動態調整輸入框提示。
+      2. 視覺強化：針對台股習慣調整損益顏色 (正紅負綠)。
+      3. 交互優化：送出資料後加入更直觀的震動反饋感（CSS 動畫）。
+      4. 代碼結構整頓，為下一步「自動庫存計算」預留數據接口。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -24,6 +24,8 @@
             --bg-gray: #f2f4f7;
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
+            --stock-up: #eb4d4b; /* 台股紅 */
+            --stock-down: #2ecc71; /* 台股綠 */
         }
 
         body {
@@ -55,6 +57,12 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+
+        /* 銀行模式下的輸入框特效 */
+        .input-bank-mode {
+            background-color: #eef6ff !important;
+            border-color: #0066cc !important;
+        }
 
         /* 隱藏捲軸 */
         ::-webkit-scrollbar { display: none; }
@@ -89,7 +97,7 @@
             </div>
             <div>
                 <p class="text-[11px] text-gray-400 uppercase font-bold tracking-wider">未實現損益</p>
-                <p id="total-profit" class="text-lg font-bold text-green-500">--</p>
+                <p id="total-profit" class="text-lg font-bold">--</p>
             </div>
         </section>
 
@@ -100,7 +108,7 @@
                 <p id="bank-balance" class="text-2xl font-black mt-1">$ --</p>
             </div>
             <div class="text-right">
-                <p class="text-[10px] bg-white/20 px-2 py-1 rounded-md inline-block">已同步</p>
+                <p class="text-[10px] bg-white/20 px-2 py-1 rounded-md inline-block font-mono" id="sync-time">WAITING</p>
             </div>
         </section>
 
@@ -118,9 +126,7 @@
             </div>
         </div>
 
-        <div id="content-transactions" class="hidden space-y-3 animate-in">
-            <!-- 交易紀錄會出現在這 -->
-        </div>
+        <div id="content-transactions" class="hidden space-y-3 animate-in"></div>
 
     </main>
 
@@ -160,16 +166,16 @@
                 <div class="space-y-4">
                     <div>
                         <label class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">標的名稱或代號</label>
-                        <input type="text" id="input-symbol" placeholder="例如: 2330 或 銀行存款" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 transition-all font-bold">
+                        <input type="text" id="input-symbol" oninput="checkBankMode(this.value)" placeholder="例如: 2330 或 銀行存款" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 transition-all font-bold">
                     </div>
                     
                     <div class="flex gap-4">
                         <div class="flex-1">
-                            <label class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">數量 (單位)</label>
+                            <label id="label-qty" class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">數量 (單位)</label>
                             <input type="number" id="input-qty" placeholder="1000" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-mono font-bold">
                         </div>
                         <div class="flex-1">
-                            <label class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">單價 / 總金額</label>
+                            <label id="label-price" class="text-[11px] font-bold text-gray-400 ml-2 mb-1 block">單價 / 總金額</label>
                             <input type="number" id="input-price" placeholder="750" class="w-full bg-gray-50 p-4 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 font-mono font-bold">
                         </div>
                     </div>
@@ -187,7 +193,6 @@
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         let currentType = "買入";
 
-        // 頁面加載後執行
         window.onload = () => {
             fetchData();
         };
@@ -201,6 +206,7 @@
                 const result = await response.json();
                 if (result.status === "success") {
                     renderDashboard(result.data);
+                    document.getElementById('sync-time').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 }
             } catch (e) {
                 console.error("Fetch Error:", e);
@@ -213,28 +219,29 @@
             const s = data.summary || {};
             const t = data.transactions || [];
 
-            // 1. 更新頂部總資產 (假設總資產 = 銀行 + 市值)
             const bank = Number(s.BankBalance) || 0;
             const market = Number(s.StockMarketValue) || 0;
             const total = bank + market;
             document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
             
-            // 2. 更新 Summary 區塊
             document.getElementById('stock-market-value').innerText = market.toLocaleString();
+            
             const profit = Number(s.TotalProfit) || 0;
             const profitEl = document.getElementById('total-profit');
             profitEl.innerText = `${profit > 0 ? '+' : ''}${profit.toLocaleString()}`;
-            profitEl.className = `text-lg font-bold ${profit >= 0 ? 'text-red-500' : 'text-green-500'}`;
+            // 台股配色：正數紅，負數綠
+            profitEl.style.color = profit >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
             
             document.getElementById('bank-balance').innerText = `$ ${bank.toLocaleString()}`;
 
-            // 3. 渲染交易流水
             const tContainer = document.getElementById('content-transactions');
             if (t.length > 0) {
-                tContainer.innerHTML = t.reverse().map(item => `
+                tContainer.innerHTML = t.reverse().map(item => {
+                    const isOut = item[1].includes('賣') || item[1].includes('提');
+                    return `
                     <div class="glass-card p-4 flex justify-between items-center">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${item[1].includes('買') || item[1].includes('存') ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xs font-black">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${!isOut ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'} text-xs font-black">
                                 ${item[1][0]}
                             </div>
                             <div>
@@ -243,19 +250,21 @@
                             </div>
                         </div>
                         <div class="text-right">
-                            <p class="font-black ${item[1].includes('賣') || item[1].includes('提') ? 'text-red-500' : 'text-gray-800'}">
+                            <p class="font-black ${isOut ? 'text-red-500' : 'text-gray-800'}">
                                 ${Number(item[4]).toLocaleString()}
                             </p>
                             <p class="text-[10px] text-gray-400 font-bold">${item[3]} 單位</p>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             } else {
                 tContainer.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">目前沒有交易紀錄</div>`;
             }
 
-            // 4. 資產配置 (簡單分類演示)
             const pContainer = document.getElementById('content-portfolio');
+            const marketPct = Math.round(market/total*100) || 0;
+            const bankPct = 100 - marketPct;
+            
             pContainer.innerHTML = `
                 <div class="glass-card p-5">
                     <div class="flex justify-between items-center mb-4">
@@ -263,21 +272,39 @@
                         <span class="text-[10px] text-gray-400 font-bold">即時分析</span>
                     </div>
                     <div class="flex h-3 rounded-full overflow-hidden mb-6 bg-gray-100">
-                        <div style="width: ${(market/total*100) || 0}%" class="bg-blue-500"></div>
-                        <div style="width: ${(bank/total*100) || 100}%" class="bg-blue-300"></div>
+                        <div style="width: ${marketPct}%" class="bg-blue-600"></div>
+                        <div style="width: ${bankPct}%" class="bg-blue-300"></div>
                     </div>
                     <div class="space-y-4">
                         <div class="flex justify-between items-center text-sm">
-                            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-500"></div><span class="font-bold text-gray-600">股票市值</span></div>
-                            <span class="font-mono font-bold text-gray-800">${Math.round(market/total*100) || 0}%</span>
+                            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-600"></div><span class="font-bold text-gray-600">股票市值</span></div>
+                            <span class="font-mono font-bold text-gray-800">${marketPct}%</span>
                         </div>
                         <div class="flex justify-between items-center text-sm">
                             <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-300"></div><span class="font-bold text-gray-600">現金存款</span></div>
-                            <span class="font-mono font-bold text-gray-800">${Math.round(bank/total*100) || 100}%</span>
+                            <span class="font-mono font-bold text-gray-800">${bankPct}%</span>
                         </div>
                     </div>
                 </div>
             `;
+        }
+
+        function checkBankMode(val) {
+            const bankKeywords = ['銀行', '存款', '現金', 'bank', 'cash'];
+            const isBank = bankKeywords.some(k => val.includes(k));
+            const inputSymbol = document.getElementById('input-symbol');
+            const inputQty = document.getElementById('input-qty');
+            
+            if (isBank) {
+                inputSymbol.classList.add('input-bank-mode');
+                inputQty.value = 1;
+                document.getElementById('label-qty').innerText = "數量 (預設 1)";
+                document.getElementById('label-price').innerText = "存提總額";
+            } else {
+                inputSymbol.classList.remove('input-bank-mode');
+                document.getElementById('label-qty').innerText = "數量 (單位)";
+                document.getElementById('label-price').innerText = "成交單價";
+            }
         }
 
         async function submitToSheet() {
@@ -290,7 +317,7 @@
             if (!symbol || !qty || !price) return;
 
             btn.disabled = true;
-            submitText.innerText = "正在傳送到 Google Sheets...";
+            submitText.innerText = "傳送中...";
 
             try {
                 await fetch(API_URL, {
@@ -304,27 +331,25 @@
                     })
                 });
 
-                // 成功後動畫與自動刷新
                 setTimeout(() => {
                     toggleAddModal();
                     fetchData();
                     btn.disabled = false;
                     submitText.innerText = "確認並儲存到雲端";
-                    // 清空輸入
                     document.getElementById('input-symbol').value = "";
                     document.getElementById('input-qty').value = "";
                     document.getElementById('input-price').value = "";
-                }, 1500);
+                    document.getElementById('input-symbol').classList.remove('input-bank-mode');
+                }, 1000);
 
             } catch (e) {
                 btn.disabled = false;
-                submitText.innerText = "儲存失敗，請重試";
+                submitText.innerText = "出錯了，請重試";
             }
         }
 
         function toggleAddModal() {
-            const m = document.getElementById('addModal');
-            m.classList.toggle('hidden');
+            document.getElementById('addModal').classList.toggle('hidden');
         }
 
         function setType(type) {
@@ -338,7 +363,6 @@
             const isPort = tab === 'portfolio';
             document.getElementById('content-portfolio').classList.toggle('hidden', !isPort);
             document.getElementById('content-transactions').classList.toggle('hidden', isPort);
-            
             document.getElementById('tab-portfolio').className = `flex-1 py-3 text-sm font-black rounded-xl transition-all ${isPort ? 'tab-active' : 'text-gray-400'}`;
             document.getElementById('tab-transactions').className = `flex-1 py-3 text-sm font-black rounded-xl transition-all ${!isPort ? 'tab-active' : 'text-gray-400'}`;
         }

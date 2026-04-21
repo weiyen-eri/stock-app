@@ -205,13 +205,14 @@
         }
 
         function renderDashboard(data) {
-            // 這些欄位必須與你的 Google Sheets Summary 頁面回傳的 JSON Key 對應
             const s = data.summary || {};
             const t = data.transactions || [];
 
-            const bank = Number(s.BankBalance) || 0;
-            const market = Number(s.StockMarketValue) || 0;
-            const profit = Number(s.TotalProfit) || 0;
+            // 修正：對應 Summary 工作表中 A 欄名稱與 B 欄數值
+            // 請確保 Google Sheets 的 Summary 工作表 A 欄有這三個項目
+            const bank = Number(s["BankBalance"]) || 0;
+            const market = Number(s["StockMarketValue"]) || 0;
+            const profit = Number(s["TotalProfit"]) || 0;
             const total = bank + market;
 
             // 1. 更新總資產
@@ -231,7 +232,7 @@
             // 更新交易流水
             const tContainer = document.getElementById('content-transactions');
             if (t.length > 0) {
-                tContainer.innerHTML = t.reverse().map(item => {
+                tContainer.innerHTML = t.slice().reverse().map(item => {
                     const type = item[1] || "";
                     const isOut = type.includes('賣') || type.includes('提');
                     return `
@@ -241,7 +242,7 @@
                                 ${type[0] || '無'}
                             </div>
                             <div>
-                                <p class="text-[10px] text-gray-400 font-bold">${String(item[0]).split(' ')[0]}</p>
+                                <p class="text-[10px] text-gray-400 font-bold">${String(item[0]).split('T')[0]}</p>
                                 <p class="font-black text-gray-800">${item[2]}</p>
                             </div>
                         </div>
@@ -285,7 +286,7 @@
         }
 
         function checkBankMode(val) {
-            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰'];
+            const bankKeywords = ['銀行', '存款', '現金', '中信', '台銀', '國泰', '存', '提'];
             const isBank = bankKeywords.some(k => val.includes(k));
             const inputSymbol = document.getElementById('input-symbol');
             const inputQty = document.getElementById('input-qty');
@@ -348,15 +349,19 @@
                     document.getElementById('input-price').value = "";
                     document.getElementById('input-symbol').classList.remove('input-bank-mode');
                 } else {
-                    throw new Error("API 回傳失敗");
+                    // 如果 API 回傳 status 不是 success，則顯示錯誤
+                    console.error("API Error:", res.message);
+                    submitText.innerText = "API 回傳失敗";
                 }
 
             } catch (e) {
-                console.error(e);
-                submitText.innerText = "錯誤，請重試";
+                console.error("Fetch Error:", e);
+                submitText.innerText = "連線失敗，請重試";
             } finally {
                 btn.disabled = false;
-                submitText.innerText = "確認並儲存到雲端";
+                if (submitText.innerText !== "API 回傳失敗" && submitText.innerText !== "連線失敗，請重試") {
+                    submitText.innerText = "確認並儲存到雲端";
+                }
             }
         }
 

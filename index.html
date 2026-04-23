@@ -2,13 +2,13 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.9.1 Pro (Full Integration & Code Markers)
+      版本: v1.9.2 Pro (ROI & Layout Refinement)
       開發狀態: 穩定修復版
       修正內容:
-      1. 恢復 v1.8.6 設定頁面：確保帳戶修改、折扣率、連動銀行能正確帶出並儲存。
-      2. 解決連線失敗：加入強化的 Null Safety 檢查，預防空白交易列中斷程式執行。
-      3. 功能模組化標註：在 Script 區塊加入行號功能說明，方便使用者維護。
-      4. 損益加總修正：修正「未實現損益」在個別券商頁面的顯示 Bug。
+      1. 儀表板佈局調整：將「未實現損益」移至右下角，移除「投資勝率」。
+      2. 新增總合報酬率：右上角新增「年化 / 簡單報酬率」，呈現整體資金效率。
+      3. 報酬率演算法：採用「最大投入本金 (Max Capital)」模型，精確計算投資總額，並動態轉換為年化報酬。
+      4. 維持所有既有功能：包含獨立持倉、預估交割金額下移、現價精確度、連動銀行餘額等。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -60,7 +60,7 @@
     <main class="max-w-md mx-auto p-5 space-y-7">
         <!-- 資產主視圖 -->
         <div id="view-assets" class="space-y-7">
-            <!-- 損益儀表板 -->
+            <!-- 損益儀表板 (v1.9.2 更新佈局) -->
             <section class="glass-card p-7 grid grid-cols-2 gap-4">
                 <div class="space-y-4">
                     <div>
@@ -74,12 +74,12 @@
                 </div>
                 <div class="space-y-4 text-right border-l border-slate-100 pl-6">
                     <div>
-                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">未實現損益</p>
-                        <p id="total-profit" class="text-xl font-black tracking-tight">--</p>
+                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">年化 / 簡單報酬</p>
+                        <p id="total-roi" class="text-[17px] font-black tracking-tight text-slate-700">--% / --%</p>
                     </div>
                     <div>
-                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">投資勝率</p>
-                        <p id="win-rate" class="text-xl font-black text-slate-700 tracking-tight">--%</p>
+                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">未實現損益</p>
+                        <p id="total-profit" class="text-xl font-black tracking-tight">--</p>
                     </div>
                 </div>
             </section>
@@ -165,7 +165,7 @@
     <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-40 transition-all duration-300" style="padding-bottom: calc(15px + var(--safe-bottom))">
         <button onclick="switchView('assets')" id="foot-assets" class="flex flex-col items-center text-blue-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" ry="2"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg><span class="text-[9px] font-black mt-1">資產</span></button>
         <button onclick="switchView('analysis')" id="foot-analysis" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg><span class="text-[9px] font-black mt-1">分析</span></button>
-        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             <span class="text-[9px] font-black mt-1">設定</span>
         </button>
     </footer>
@@ -246,7 +246,7 @@
             } finally { if (icon) icon.classList.remove('animate-spin'); }
         }
 
-        // [L209-254] 損益計算引擎 (calculateIndependentStats)
+        // [L209-272] 損益與報酬率計算引擎 (calculateIndependentStats)
         function calculateIndependentStats() {
             const txs = ledgerData.transactions || [];
             const invData = ledgerData.inventory || [];
@@ -255,11 +255,32 @@
 
             let filteredTxs = currentAccount === "全部帳戶" ? txs : txs.filter(t => t[6] === currentAccount);
             const holdings = {};
-            let totalRealized = 0, winCount = 0, totalSellCount = 0;
+            let totalRealized = 0;
+            
+            // 計算最大投入本金 (用於精確計算整體帳戶報酬率)
+            let sortedTxsForCap = [...filteredTxs].sort((a,b) => new Date(a[0]) - new Date(b[0]));
+            let currentCapital = 0, maxCapital = 0, firstTxDate = null;
 
-            filteredTxs.forEach(t => {
+            sortedTxsForCap.forEach(t => {
                 if (!t || t.length < 5) return;
                 const type = t[1], sym = t[2], q = parseSafeInt(t[3]), p = parseSafeFloat(t[4]), f = parseSafeInt(t[5]), tax = parseSafeInt(t[7]);
+                
+                // 追蹤第一筆有意義的交易日期
+                if (!firstTxDate && ['買入', '賣出', '除權息', '存入', '提領'].includes(type)) {
+                    firstTxDate = new Date(t[0]);
+                }
+                
+                // 資本進出追蹤
+                if (type === '買入') {
+                    currentCapital += (q * p + f + tax);
+                    if (currentCapital > maxCapital) maxCapital = currentCapital;
+                } else if (type === '賣出') {
+                    currentCapital -= (q * p - f - tax);
+                } else if (type === '除權息') {
+                    currentCapital -= p;
+                }
+
+                // 損益細項計算
                 if (!sym) return;
                 if (!holdings[sym]) holdings[sym] = { qty: 0, totalBuyCost: 0, totalBuyQty: 0, divTotal: 0 };
                 
@@ -268,7 +289,7 @@
                 } else if (type === '賣出') {
                     const avgCost = holdings[sym].totalBuyQty > 0 ? (holdings[sym].totalBuyCost / holdings[sym].totalBuyQty) : 0;
                     const realized = (q * p - f - tax) - (q * avgCost);
-                    totalRealized += realized; holdings[sym].qty -= q; totalSellCount++; if (realized > 0) winCount++;
+                    totalRealized += realized; holdings[sym].qty -= q; 
                 } else if (type === '除權息') {
                     totalRealized += p; holdings[sym].divTotal += p;
                 }
@@ -281,10 +302,28 @@
                 totalMarketValue += marketV; totalUnrealized += unrealized;
                 return { symbol: sym, qty: h.qty, price: curP, avgCost: avgC, unrealized };
             });
-            return { totalMarketValue, totalUnrealized, totalRealized, list: validList, winRate: totalSellCount > 0 ? (winCount/totalSellCount)*100 : 0 };
+
+            // 計算簡單報酬與年化報酬
+            let totalProfitAll = totalUnrealized + totalRealized;
+            let simpleROI = maxCapital > 0 ? (totalProfitAll / maxCapital) * 100 : 0;
+            let annualizedROI = 0;
+            
+            if (firstTxDate && maxCapital > 0) {
+                let days = Math.max(1, (new Date() - firstTxDate) / (1000 * 60 * 60 * 24));
+                let years = days / 365.25;
+                if (years > 0.01) {
+                    let ratio = (maxCapital + totalProfitAll) / maxCapital;
+                    if (ratio > 0) annualizedROI = (Math.pow(ratio, 1 / years) - 1) * 100;
+                    else annualizedROI = -100;
+                } else {
+                    annualizedROI = simpleROI; // 持有不到幾天時，視同簡單報酬
+                }
+            }
+
+            return { totalMarketValue, totalUnrealized, totalRealized, list: validList, simpleROI, annualizedROI };
         }
 
-        // [L256-285] 儀表板與持倉清單渲染 (renderDashboard)
+        // [L274-307] 儀表板與持倉清單渲染 (renderDashboard)
         function renderDashboard() {
             const stats = calculateIndependentStats();
             const s = ledgerData.summary || {}, b = ledgerData.accountBalances || {};
@@ -294,11 +333,18 @@
 
             document.getElementById('total-assets').innerText = `$ ${Math.round(totalNetWorth).toLocaleString()}`;
             document.getElementById('stock-market-value').innerText = `$ ${Math.round(stats.totalMarketValue).toLocaleString()}`;
+            
             document.getElementById('realized-profit').innerText = `${stats.totalRealized >= 0 ? '+' : ''}${Math.round(stats.totalRealized).toLocaleString()}`;
             document.getElementById('realized-profit').style.color = stats.totalRealized >= 0 ? '#2563eb' : '#64748b';
+            
             document.getElementById('total-profit').innerText = `${stats.totalUnrealized >= 0 ? '+' : ''}${Math.round(stats.totalUnrealized).toLocaleString()}`;
             document.getElementById('total-profit').style.color = stats.totalUnrealized >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
-            document.getElementById('win-rate').innerText = stats.winRate.toFixed(1) + "%";
+            
+            // 顯示 年化 / 簡單 報酬率
+            const roiEl = document.getElementById('total-roi');
+            roiEl.innerText = `${stats.annualizedROI.toFixed(1)}% / ${stats.simpleROI.toFixed(1)}%`;
+            roiEl.style.color = stats.simpleROI >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
+
             document.getElementById('bank-balance').innerText = `$ ${Math.round(bank).toLocaleString()}`;
             document.getElementById('bank-label').innerText = currentAccount === "全部帳戶" ? "可用現金 (全部)" : (setting?.Category === '券商' && setting.LinkedBank ? `${setting.LinkedBank} (連動)` : `${currentAccount} 餘額`);
             
@@ -320,7 +366,7 @@
             renderTransactions();
         }
 
-        // [L287-340] 分析模組實作 (renderAnalysis)
+        // [L309-340] 分析模組實作 (renderAnalysis)
         function renderAnalysis() {
             const t = ledgerData.transactions || [], b = ledgerData.accountBalances || {}, inv = ledgerData.inventory || [], sets = ledgerData.settings || [];
             const trendCtx = document.getElementById('chart-networth-trend').getContext('2d');
@@ -433,6 +479,7 @@
             document.getElementById('type-buy').innerText = isBrokerMode ? "買入" : "存入";
             document.getElementById('type-sell').innerText = isBrokerMode ? "賣出" : "提領";
             document.getElementById('type-third').innerText = isBrokerMode ? "除權息" : "轉帳";
+            document.getElementById('type-third').classList.toggle('hidden', false);
             document.getElementById('modal-title').innerText = `${currentAccount} (${acc.Category})`;
             let displayBal = parseSafeInt(ledgerData.accountBalances[currentAccount]);
             if (isBrokerMode && acc.LinkedBank) displayBal = parseSafeInt(ledgerData.accountBalances[acc.LinkedBank]);
@@ -446,6 +493,7 @@
         async function submitToSheet() {
             if (isSubmitting) return;
             const btnT = document.getElementById('submit-text'), sym = document.getElementById('input-symbol').value, qty = document.getElementById('input-qty').value || 1, prc = document.getElementById('input-price').value, to = document.getElementById('input-to-account').value, dt = document.getElementById('input-date').value;
+            if (currentType === '轉帳' && (!to || !prc)) return showToast("資訊不全");
             if (!prc) return showToast("請填金額");
             isSubmitting = true; btnT.innerText = "同步中...";
             try {

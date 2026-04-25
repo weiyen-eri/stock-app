@@ -410,10 +410,11 @@
             if (!bList || !bkList) return;
             const accs = ledgerData.settings || [], bData = accs.filter(s => s.Category === '券商'), bkData = accs.filter(s => s.Category === '銀行');
             
-            // 證券帳戶 UI
-            bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3></div>` + bData.map(s => `
-                <div class="glass-card p-7 space-y-5 mb-4">
-                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full bg-transparent outline-none text-lg">
+            // 證券帳戶 UI (補回新增與刪除按鈕)
+            bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onclick="addNewAccount('券商')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bData.map(s => `
+                <div class="glass-card p-7 space-y-5 mb-4 relative">
+                    <button onclick="removeAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
+                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
                     <div class="space-y-4">
                         <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</p>
                         <select data-field="LinkedBank" class="w-full bg-transparent text-sm font-bold outline-none">${bkData.map(bn => `<option value="${bn.AccountName}" ${s.LinkedBank === bn.AccountName ? 'selected' : ''}>${bn.AccountName}</option>`).join('')}<option value="" ${!s.LinkedBank?'selected':''}>無</option></select></div>
@@ -424,10 +425,11 @@
                     </div>
                 </div>`).join('');
             
-            // 銀行帳戶 UI
-            bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3></div>` + bkData.map(s => `
-                <div class="glass-card p-7 space-y-4 mb-4">
-                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full bg-transparent outline-none text-lg">
+            // 銀行帳戶 UI (補回新增與刪除按鈕)
+            bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onclick="addNewAccount('銀行')" class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bkData.map(s => `
+                <div class="glass-card p-7 space-y-4 mb-4 relative">
+                    <button onclick="removeAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
+                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
                     <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">存款年利率 %</p>
                     <input type="number" data-field="InterestRate" value="${s.InterestRate || 0}" step="0.1" class="w-full bg-transparent text-sm font-bold outline-none"></div>
                 </div>`).join('');
@@ -551,6 +553,24 @@
                 return `<div class="glass-card p-6 flex justify-between items-center fade-in"><div><p class="text-[10px] opacity-40 font-bold mb-1 uppercase">${(item[0]||'').split(' ')[0]} • ${item[6] || '系統'}</p><p class="font-black text-slate-700 text-sm">${item[2] || '無'}</p></div><div class="text-right"><p class="font-black ${isOut?'text-red-500':'text-slate-800'}">${isOut?'-':'+'}${Math.round(parseSafeFloat(item[3])*parseSafeFloat(item[4])).toLocaleString()}</p><p class="text-[10px] opacity-40 font-bold">${item[1]} ${item[3]} UNIT</p></div></div>`;
             }).join('') : `<p class="text-center py-20 opacity-30 text-xs font-bold uppercase">No Records</p>`;
         }
+        // --- 帳戶設定新增與刪除輔助函式 ---
+        function addNewAccount(cat) {
+            if (!ledgerData.settings) ledgerData.settings = [];
+            ledgerData.settings.push({ 
+                AccountName: "新" + cat + Math.floor(Math.random() * 100), 
+                Category: cat, 
+                LinkedBank: "", 
+                DiscountRate: 100, 
+                MinFee: 20, 
+                InterestRate: 0 
+            });
+            renderSettings();
+        }
+
+        function removeAccount(accName) {
+            ledgerData.settings = (ledgerData.settings || []).filter(s => s.AccountName !== accName);
+            renderSettings();
+        }       
     </script>
 </body>
 </html>

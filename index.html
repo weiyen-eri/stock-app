@@ -2,13 +2,12 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v1.9.2 Pro (ROI & Layout Refinement)
+      版本: v1.9.3 Pro (UX & Safety Updates)
       開發狀態: 穩定修復版
       修正內容:
-      1. 儀表板佈局調整：將「未實現損益」移至右下角，移除「投資勝率」。
-      2. 新增總合報酬率：右上角新增「年化 / 簡單報酬率」，呈現整體資金效率。
-      3. 報酬率演算法：採用「最大投入本金 (Max Capital)」模型，精確計算投資總額，並動態轉換為年化報酬。
-      4. 維持所有既有功能：包含獨立持倉、預估交割金額下移、現價精確度、連動銀行餘額等。
+      1. 新增帳戶置頂：將 addNewAccount 中的陣列寫入方式從 push 改為 unshift，讓新帳戶出現在最上方。
+      2. 刪除確認防護：新增客製化 confirmModal 彈窗，避免使用者誤觸「刪除」按鈕。
+      3. 維持既有功能：獨立持倉、年化/簡單報酬率、UI佈局、分析圖表等。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -26,7 +25,9 @@
         ::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
+        .modal-animate { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .tab-btn.active { color: var(--primary-blue); background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
         select { -webkit-appearance: none; appearance: none; }
         .chart-container { position: relative; width: 100%; height: 220px; }
@@ -60,7 +61,7 @@
     <main class="max-w-md mx-auto p-5 space-y-7">
         <!-- 資產主視圖 -->
         <div id="view-assets" class="space-y-7">
-            <!-- 損益儀表板 (v1.9.2 更新佈局) -->
+            <!-- 損益儀表板 -->
             <section class="glass-card p-7 grid grid-cols-2 gap-4">
                 <div class="space-y-4">
                     <div>
@@ -209,18 +210,29 @@
         </div>
     </div>
 
+    <!-- 刪除確認彈窗 (新增防呆機制) -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 z-[110] hidden flex items-center justify-center backdrop-blur-sm transition-all">
+        <div class="bg-white w-[85%] max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate">
+            <h3 class="text-xl font-black text-slate-800 mb-2">確認刪除帳戶？</h3>
+            <p class="text-sm text-slate-500 font-bold mb-8" id="confirm-msg">您即將刪除此帳戶，此操作無法復原。</p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirmModal()" class="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button>
+                <button id="btn-confirm-delete" class="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg shadow-red-200 active:scale-95 transition-all">確認刪除</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="fixed top-14 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-10 py-5 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
 
     <script>
-        // [L173-181] 核心變數與初始化
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         let ledgerData = { summary: {}, transactions: [], accountBalances: {}, settings: [], inventory: [] };
         let currentAccount = "全部帳戶", currentCategory = "all", currentType = "買入", isSubmitting = false, isBrokerMode = false;
         let trendChart = null, bankPie = null, stockPie = null;
+        let accountToDelete = null; // 用於儲存即將刪除的帳戶名稱
 
         window.onload = () => { fetchData(); document.getElementById('input-date').value = new Date().toISOString().split('T')[0]; };
 
-        // [L183-207] 資料抓取功能 (fetchData)
         async function fetchData() {
             const icon = document.getElementById('refresh-icon');
             if (icon) icon.classList.add('animate-spin');
@@ -229,7 +241,6 @@
                 const res = await response.json();
                 if (res.status === "success") {
                     ledgerData = res.data || {};
-                    // 強化初始化檢查
                     if (!ledgerData.settings) ledgerData.settings = [];
                     if (!ledgerData.transactions) ledgerData.transactions = [];
                     if (!ledgerData.accountBalances) ledgerData.accountBalances = {};
@@ -246,7 +257,6 @@
             } finally { if (icon) icon.classList.remove('animate-spin'); }
         }
 
-        // [L209-272] 損益與報酬率計算引擎 (calculateIndependentStats)
         function calculateIndependentStats() {
             const txs = ledgerData.transactions || [];
             const invData = ledgerData.inventory || [];
@@ -257,7 +267,6 @@
             const holdings = {};
             let totalRealized = 0;
             
-            // 計算最大投入本金 (用於精確計算整體帳戶報酬率)
             let sortedTxsForCap = [...filteredTxs].sort((a,b) => new Date(a[0]) - new Date(b[0]));
             let currentCapital = 0, maxCapital = 0, firstTxDate = null;
 
@@ -265,12 +274,10 @@
                 if (!t || t.length < 5) return;
                 const type = t[1], sym = t[2], q = parseSafeInt(t[3]), p = parseSafeFloat(t[4]), f = parseSafeInt(t[5]), tax = parseSafeInt(t[7]);
                 
-                // 追蹤第一筆有意義的交易日期
                 if (!firstTxDate && ['買入', '賣出', '除權息', '存入', '提領'].includes(type)) {
                     firstTxDate = new Date(t[0]);
                 }
                 
-                // 資本進出追蹤
                 if (type === '買入') {
                     currentCapital += (q * p + f + tax);
                     if (currentCapital > maxCapital) maxCapital = currentCapital;
@@ -280,7 +287,6 @@
                     currentCapital -= p;
                 }
 
-                // 損益細項計算
                 if (!sym) return;
                 if (!holdings[sym]) holdings[sym] = { qty: 0, totalBuyCost: 0, totalBuyQty: 0, divTotal: 0 };
                 
@@ -303,7 +309,6 @@
                 return { symbol: sym, qty: h.qty, price: curP, avgCost: avgC, unrealized };
             });
 
-            // 計算簡單報酬與年化報酬
             let totalProfitAll = totalUnrealized + totalRealized;
             let simpleROI = maxCapital > 0 ? (totalProfitAll / maxCapital) * 100 : 0;
             let annualizedROI = 0;
@@ -316,14 +321,13 @@
                     if (ratio > 0) annualizedROI = (Math.pow(ratio, 1 / years) - 1) * 100;
                     else annualizedROI = -100;
                 } else {
-                    annualizedROI = simpleROI; // 持有不到幾天時，視同簡單報酬
+                    annualizedROI = simpleROI;
                 }
             }
 
             return { totalMarketValue, totalUnrealized, totalRealized, list: validList, simpleROI, annualizedROI };
         }
 
-        // [L274-307] 儀表板與持倉清單渲染 (renderDashboard)
         function renderDashboard() {
             const stats = calculateIndependentStats();
             const s = ledgerData.summary || {}, b = ledgerData.accountBalances || {};
@@ -340,7 +344,6 @@
             document.getElementById('total-profit').innerText = `${stats.totalUnrealized >= 0 ? '+' : ''}${Math.round(stats.totalUnrealized).toLocaleString()}`;
             document.getElementById('total-profit').style.color = stats.totalUnrealized >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
             
-            // 顯示 年化 / 簡單 報酬率
             const roiEl = document.getElementById('total-roi');
             roiEl.innerText = `${stats.annualizedROI.toFixed(1)}% / ${stats.simpleROI.toFixed(1)}%`;
             roiEl.style.color = stats.simpleROI >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
@@ -366,7 +369,6 @@
             renderTransactions();
         }
 
-        // [L309-340] 分析模組實作 (renderAnalysis)
         function renderAnalysis() {
             const t = ledgerData.transactions || [], b = ledgerData.accountBalances || {}, inv = ledgerData.inventory || [], sets = ledgerData.settings || [];
             const trendCtx = document.getElementById('chart-networth-trend').getContext('2d');
@@ -404,16 +406,15 @@
             }).join('');
         }
 
-        // [L342-371] 設定模組實作 (renderSettings & saveAllSettings)
+        // --- 設定模組 (包含新增帳戶置頂、呼叫刪除確認Modal) ---
         function renderSettings() {
             const bList = document.getElementById('settings-broker-list'), bkList = document.getElementById('settings-bank-list');
             if (!bList || !bkList) return;
             const accs = ledgerData.settings || [], bData = accs.filter(s => s.Category === '券商'), bkData = accs.filter(s => s.Category === '銀行');
             
-            // 證券帳戶 UI (補回新增與刪除按鈕)
             bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onclick="addNewAccount('券商')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bData.map(s => `
                 <div class="glass-card p-7 space-y-5 mb-4 relative">
-                    <button onclick="removeAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
+                    <button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
                     <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
                     <div class="space-y-4">
                         <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</p>
@@ -425,14 +426,49 @@
                     </div>
                 </div>`).join('');
             
-            // 銀行帳戶 UI (補回新增與刪除按鈕)
             bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onclick="addNewAccount('銀行')" class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bkData.map(s => `
                 <div class="glass-card p-7 space-y-4 mb-4 relative">
-                    <button onclick="removeAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
+                    <button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
                     <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
                     <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">存款年利率 %</p>
                     <input type="number" data-field="InterestRate" value="${s.InterestRate || 0}" step="0.1" class="w-full bg-transparent text-sm font-bold outline-none"></div>
                 </div>`).join('');
+        }
+
+        function addNewAccount(cat) {
+            if (!ledgerData.settings) ledgerData.settings = [];
+            // 使用 unshift 將新帳戶推入陣列最前方，使其顯示在清單最上方
+            ledgerData.settings.unshift({ 
+                AccountName: "新" + cat + Math.floor(Math.random() * 100), 
+                Category: cat, 
+                LinkedBank: "", 
+                DiscountRate: 100, 
+                MinFee: 20, 
+                InterestRate: 0 
+            });
+            renderSettings();
+        }
+
+        // --- 刪除確認防呆機制 ---
+        function confirmRemoveAccount(accName) {
+            accountToDelete = accName;
+            document.getElementById('confirm-msg').innerText = `您確定要刪除「${accName}」嗎？這將會從設定中移除，但不會影響您的歷史交易紀錄。`;
+            document.getElementById('confirmModal').classList.remove('hidden');
+            document.getElementById('btn-confirm-delete').onclick = executeRemoveAccount;
+        }
+
+        function closeConfirmModal() {
+            accountToDelete = null;
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+
+        function executeRemoveAccount() {
+            if (accountToDelete) {
+                ledgerData.settings = (ledgerData.settings || []).filter(s => s.AccountName !== accountToDelete);
+                renderSettings();
+                closeConfirmModal();
+                showToast("帳戶已刪除 (請記得儲存)");
+            }
         }
 
         async function saveAllSettings() {
@@ -450,7 +486,6 @@
             } catch (e) { showToast("儲存失敗"); } finally { btn.innerText = "儲存並同步雲端"; }
         }
 
-        // [L373-424] UI 交互邏輯 (切換類別、顯示彈窗、提交交易)
         function setType(t) {
             currentType = (t === '轉帳' || t === '除權息') ? (isBrokerMode ? '除權息' : '轉帳') : t;
             const bBuy = document.getElementById('type-buy'), bSell = document.getElementById('type-sell'), bThird = document.getElementById('type-third');
@@ -505,7 +540,6 @@
             } catch (e) { showToast("儲存失敗"); } finally { isSubmitting = false; btnT.innerText = "確認並儲存"; }
         }
 
-        // [L426-476] 數值計算與頁面跳轉輔助 (AutoCalc, ViewSwitch)
         function runAutoCalc() {
             if (!isBrokerMode || currentType === '轉帳' || currentType === '除權息') return;
             const sym = document.getElementById('input-symbol').value, q = parseFloat(document.getElementById('input-qty').value) || 0, p = parseFloat(document.getElementById('input-price').value) || 0, tot = q * p;
@@ -553,24 +587,6 @@
                 return `<div class="glass-card p-6 flex justify-between items-center fade-in"><div><p class="text-[10px] opacity-40 font-bold mb-1 uppercase">${(item[0]||'').split(' ')[0]} • ${item[6] || '系統'}</p><p class="font-black text-slate-700 text-sm">${item[2] || '無'}</p></div><div class="text-right"><p class="font-black ${isOut?'text-red-500':'text-slate-800'}">${isOut?'-':'+'}${Math.round(parseSafeFloat(item[3])*parseSafeFloat(item[4])).toLocaleString()}</p><p class="text-[10px] opacity-40 font-bold">${item[1]} ${item[3]} UNIT</p></div></div>`;
             }).join('') : `<p class="text-center py-20 opacity-30 text-xs font-bold uppercase">No Records</p>`;
         }
-        // --- 帳戶設定新增與刪除輔助函式 ---
-        function addNewAccount(cat) {
-            if (!ledgerData.settings) ledgerData.settings = [];
-            ledgerData.settings.push({ 
-                AccountName: "新" + cat + Math.floor(Math.random() * 100), 
-                Category: cat, 
-                LinkedBank: "", 
-                DiscountRate: 100, 
-                MinFee: 20, 
-                InterestRate: 0 
-            });
-            renderSettings();
-        }
-
-        function removeAccount(accName) {
-            ledgerData.settings = (ledgerData.settings || []).filter(s => s.AccountName !== accName);
-            renderSettings();
-        }       
     </script>
 </body>
 </html>

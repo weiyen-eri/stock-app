@@ -2,14 +2,14 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v2.2.5 Pro (Deep Analysis & Golden UX)
+      版本: v2.2.7 Pro (Toast Fix & Stability)
       開發狀態: 基準穩定版
       修正內容:
-      1. 完整恢復分析視圖：補回持股占比與銀行占比兩大區塊，提供最全面的資產覆盤。
-      2. 現金視覺美化：將所有圓餅圖中的「現金」顏色改為黃金色彩 (#FFD700)，更有財富質感。
-      3. 修改紀錄優化：進入修改模式時隱藏「帳戶餘額」顯示，確保介面簡潔不誤導。
-      4. UI 佈局：操作按鈕維持右上角、儀表板黃金四格佈局、i17 長螢幕優化。
-      5. 穩定性：維持日期解析修復，確保修改功能點擊靈敏。
+      1. 修復 TypeError (showToast)：補回遺漏的 #toast HTML 元素，解決儲存或報錯時的程式中斷問題。
+      2. 修正登記錯誤：銀行帳戶的「賣出」操作正確登記為「提領」，確保帳目屬性正確。
+      3. 儲存成功回饋：確認儲存後按鈕將變更為「儲存成功」，提供直觀的操作確認感。
+      4. 全自動數據更新：交易完成後自動刷新數據，切換至「歷史明細」頁籤時確保內容最即時。
+      5. 現金視覺美化：維持配置圖與分析圖中的「現金」為金黃色 (#FFD700)。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -43,7 +43,7 @@
         <div class="flex justify-between items-center px-8 pt-4 pb-4">
             <button onclick="fetchData()" class="w-11 h-11 flex items-center justify-center bg-white/15 rounded-2xl btn-press"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="refresh-icon"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg></button>
             <div class="text-center"><h1 class="text-[11px] uppercase tracking-[0.3em] opacity-70 font-black mb-0.5">財富成長</h1><p id="total-assets" class="text-2xl font-black tabular-nums tracking-tighter">$ 0</p></div>
-            <button onclick="handleAddClick()" class="w-11 h-11 flex items-center justify-center bg-white rounded-2xl text-blue-600 shadow-xl btn-press"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            <button onclick="handleAddClick()" class="w-11 h-11 flex items-center justify-center bg-white rounded-2xl text-blue-600 shadow-xl btn-press"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><line x1="12" y1="5" x2="12" ry="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         </div>
         <div class="px-4 pb-8" id="header-switcher-area">
             <div id="account-switcher" class="flex gap-3 overflow-x-auto no-scrollbar px-2 py-1 items-center">
@@ -89,20 +89,12 @@
             <div id="content-transactions" class="hidden space-y-4"></div>
         </div>
 
-        <!-- [UI] 分析視圖 (完整恢復) -->
+        <!-- [UI] 分析視圖 -->
         <div id="view-analysis" class="hidden space-y-12 fade-in pb-20">
             <div class="px-2 pt-6"><h2 class="text-3xl font-black text-slate-800">資產深度分析</h2></div>
-            
-            <!-- 1. 財富成長趨勢 -->
             <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">財富成長趨勢</h3><div class="glass-card p-6"><div class="chart-container" style="height: 220px;"><canvas id="chart-networth-trend"></canvas></div></div></section>
-            
-            <!-- 2. 持股資產占比 (恢復) -->
             <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">持股資產占比</h3><div class="glass-card p-8 flex flex-col items-center"><div class="pie-chart-container" style="max-width: 180px;"><canvas id="chart-stock-pie"></canvas></div><div id="analysis-stock-list" class="w-full mt-8 space-y-3"></div></div></section>
-            
-            <!-- 3. 銀行資金占比 (恢復) -->
             <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">銀行資金占比</h3><div class="glass-card p-8 flex flex-col items-center"><div class="pie-chart-container" style="max-width: 180px;"><canvas id="chart-bank-pie"></canvas></div><div id="analysis-bank-list" class="w-full mt-8 space-y-3"></div></div></section>
-            
-            <!-- 4. 個股損益排行 -->
             <section class="space-y-4">
                 <div class="flex justify-between items-center px-2"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股損益排行</h3>
                     <div class="flex gap-2">
@@ -125,7 +117,7 @@
     <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-40" style="padding-bottom: calc(15px + var(--safe-bottom))">
         <button onclick="switchView('assets')" id="foot-assets" class="flex flex-col items-center text-blue-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" ry="2"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg><span class="text-[9px] font-black mt-1">資產</span></button>
         <button onclick="switchView('analysis')" id="foot-analysis" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg><span class="text-[9px] font-black mt-1">分析</span></button>
-        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span class="text-[9px] font-black mt-1">設定</span></button>
+        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span class="text-[9px] font-black mt-1">設定</span></button>
     </footer>
 
     <!-- [UI] 交易輸入/編輯彈窗 -->
@@ -149,7 +141,11 @@
         </div>
     </div>
 
-    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 z-[110] hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white w-[85%] max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 class="text-xl font-black text-slate-800 mb-2" id="confirm-title">確認操作？</h3><p class="text-sm text-slate-500 font-bold mb-8" id="confirm-msg">操作無法復原。</p><div class="flex gap-3"><button onclick="closeConfirmModal()" class="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button id="btn-confirm-action" class="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg active:scale-95 transition-all">確認</button></div></div></div>
+    <!-- [UI] 警告確認彈窗 -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/60 z-[110] hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white w-[85%] max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 class="text-xl font-black text-slate-800 mb-2" id="confirm-title">確認操作？</h3><p class="text-sm text-slate-500 font-bold mb-8" id="confirm-msg">操作無法復原。</p><div class="flex gap-3"><button onclick="closeConfirmModal()" class="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button id="btn-confirm-action" class="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg active:scale-95 transition-all">確認</button></div></div></div>
+
+    <!-- [重要 Fix] 補回遺漏的 Toast 提示元素 -->
+    <div id="toast" class="fixed top-14 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-10 py-5 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
 
     <script>
         // [L190-204] 核心變數
@@ -162,7 +158,6 @@
 
         window.onload = () => { fetchData(); document.getElementById('input-date').value = new Date().toISOString().split('T')[0]; };
 
-        // [L206-229] 資料同步
         async function fetchData() {
             const icon = document.getElementById('refresh-icon'); if (icon) icon.classList.add('animate-spin');
             try {
@@ -178,7 +173,6 @@
             } catch (e) { showToast("連線失敗"); } finally { if (icon) icon.classList.remove('animate-spin'); }
         }
 
-        // [L231-294] 穿透計算引擎
         function calculateIndependentStats() {
             const txs = ledgerData.transactions || [], invData = ledgerData.inventory || [], priceMap = {}, sets = ledgerData.settings || [];
             invData.forEach(i => { if(i.代號) priceMap[i.代號] = parseSafeFloat(i.現價); });
@@ -228,7 +222,6 @@
             return { totalMarketValue, totalUnrealized, totalRealized, list: allStocksList, simpleROI, annualizedROI, relevantAccounts };
         }
 
-        // [L296-370] 儀表板與圓餅圖渲染
         function renderDashboard() {
             const stats = calculateIndependentStats(), s = ledgerData.summary || {}, b = ledgerData.accountBalances || {}, sets = ledgerData.settings || [];
             const setting = sets.find(x => x.AccountName === currentAccount);
@@ -264,12 +257,11 @@
         function renderAllocationChart(cash, stocks) {
             const ctxEl = document.getElementById('chart-asset-allocation'); if (!ctxEl) return;
             if (allocationChart) allocationChart.destroy();
-            const labels = ['現金'], data = [cash], colors = ['#FFD700']; // [更新 v2.2.5] 璀璨金黃色
+            const labels = ['現金'], data = [cash], colors = ['#FFD700']; 
             stocks.forEach((s, i) => { labels.push(s.symbol); data.push(s.qty * s.price); colors.push(['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'][i % 7]); });
             allocationChart = new Chart(ctxEl.getContext('2d'), { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 4, borderColor: '#ffffff', hoverOffset: 12 }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { legend: { display: false }, tooltip: { enabled: true, backgroundColor: 'rgba(255,255,255,0.95)', titleColor: '#1e293b', bodyColor: '#1e293b', bodyFont: { weight: 'bold' }, padding: 12, cornerRadius: 15, displayColors: true, callbacks: { label: (c) => ` ${c.label}: $${c.raw.toLocaleString()} (${Math.round(c.raw / data.reduce((a,b)=>a+b,0) * 100)}%)` } } } } });
         }
 
-        // [L372-411] 歷史明細渲染
         function renderTransactions(relevantAccounts) {
             const t = ledgerData.transactions || [], container = document.getElementById('content-transactions'); if (!container) return;
             const indexed = t.map((val, idx) => ({ val, idx }));
@@ -294,7 +286,6 @@
             }).join('') : `<p class="text-center py-20 opacity-30 text-xs font-bold uppercase">No Records</p>`;
         }
 
-        // [L413-485] 分析、排序與完整恢復
         function renderAnalysis() {
             const t = ledgerData.transactions || [], b = ledgerData.accountBalances || {}, inv = ledgerData.inventory || [], sets = ledgerData.settings || [];
             const trendCtx = document.getElementById('chart-networth-trend')?.getContext('2d');
@@ -305,8 +296,6 @@
                 sortedTx.forEach(tx => { const impact = (tx[1].includes('存') || tx[1].includes('買') || tx[1].includes('除')) ? (parseSafeFloat(tx[3])*parseSafeFloat(tx[4])) : -(parseSafeFloat(tx[3])*parseSafeFloat(tx[4])); cumulative += impact; labels.push(tx[0].split(' ')[0]); dataPoints.push(cumulative); });
                 trendChart = new Chart(trendCtx, { type: 'line', data: { labels, datasets: [{ data: dataPoints, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
             }
-            
-            // 恢復完整持股占比
             const stockEl = document.getElementById('chart-stock-pie');
             if (stockEl) {
                 const stockCtx = stockEl.getContext('2d'); if (stockPie) stockPie.destroy();
@@ -314,8 +303,6 @@
                 stockPie = new Chart(stockCtx, { type: 'pie', data: { labels: sLab, datasets: [{ data: sVal, backgroundColor: ['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
                 document.getElementById('analysis-stock-list').innerHTML = vInv.map((item, i) => `<div class="flex justify-between text-[11px] font-bold"><span class="text-slate-600">${item.代號}</span><span class="text-slate-800">$${Math.round(sVal[i]).toLocaleString()} (${Math.round(sVal[i]/totalS*100)}%)</span></div>`).join('');
             }
-
-            // 恢復完整銀行占比
             const bankEl = document.getElementById('chart-bank-pie');
             if (bankEl) {
                 const bankCtx = bankEl.getContext('2d'); if (bankPie) bankPie.destroy();
@@ -324,7 +311,6 @@
                 bankPie = new Chart(bankCtx, { type: 'doughnut', data: { labels: bKeys, datasets: [{ data: bVals, backgroundColor: bCols, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
                 document.getElementById('analysis-bank-list').innerHTML = bKeys.map((k, i) => `<div class="flex justify-between text-[11px] font-bold"><div class="flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full" style="background:${bCols[i%bCols.length]}"></div><span class="text-slate-600">${k}</span></div><span class="text-slate-400">$${bVals[i].toLocaleString()} (${Math.round(bVals[i]/totalB*100)}%)</span></div>`).join('');
             }
-
             const ranking = document.getElementById('stock-ranking-container'); const stats = calculateIndependentStats();
             let rData = stats.list.filter(s => s.totalProfit !== 0 || s.roi !== 0).sort((a, b) => {
                 let valA = rankingSortBy === 'profit' ? a.totalProfit : a.roi; let valB = rankingSortBy === 'profit' ? b.totalProfit : b.roi;
@@ -337,14 +323,11 @@
             }).join('') || '<p class="text-center opacity-30 text-xs py-4">尚無盈虧數據</p>';
         }
 
-        // [L487-550] 修改與控制
         function editTransaction(index) {
             const tx = ledgerData.transactions[index]; if (!tx) return;
             isEditMode = true; txIndexToModify = index;
             document.getElementById('modal-title').innerText = "修改紀錄"; document.getElementById('submit-text').innerText = "確認修改";
-            // [更新 v2.2.5] 修改模式隱藏帳戶餘額
             document.getElementById('modal-acc-balance').classList.add('hidden');
-            
             currentAccount = tx[6];
             const acc = ledgerData.settings.find(s => s.AccountName === currentAccount); isBrokerMode = (acc && acc.Category === '券商');
             document.getElementById('input-symbol').value = tx[2]; document.getElementById('input-qty').value = parseSafeFloat(tx[3]);
@@ -358,7 +341,6 @@
         async function executeDeleteTransaction() { closeConfirmModal(); showToast("刪除中..."); try { const res = await (await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteTransaction', index: txIndexToModify }) })).json(); if (res.status === "success") { showToast("已刪除"); fetchData(); } } catch (e) { showToast("刪除失敗"); } }
         function renderSettings() { const bList = document.getElementById('settings-broker-list'), bkList = document.getElementById('settings-bank-list'); if (!bList || !bkList) return; const accs = ledgerData.settings || [], bData = accs.filter(s => s.Category === '券商'), bkData = accs.filter(s => s.Category === '銀行'); bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onclick="addNewAccount('券商')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bData.map(s => `<div class="glass-card p-7 space-y-5 mb-4 relative"><button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button><input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg"><div class="space-y-4"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</p><select data-field="LinkedBank" class="w-full bg-transparent text-sm font-bold outline-none">${bkData.map(bn => `<option value="${bn.AccountName}" ${s.LinkedBank === bn.AccountName ? 'selected' : ''}>${bn.AccountName}</option>`).join('')}<option value="" ${!s.LinkedBank?'selected':''}>無</option></select></div><div class="grid grid-cols-2 gap-4"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">下單折扣</p><input type="number" data-field="DiscountRate" value="${s.DiscountRate || 100}" class="w-full bg-transparent text-sm font-bold outline-none"></div><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">最低費</p><input type="number" data-field="MinFee" value="${s.MinFee || 20}" class="w-full bg-transparent text-sm font-bold outline-none"></div></div></div></div>`).join(''); bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onclick="addNewAccount('銀行')" class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bkData.map(s => `<div class="glass-card p-7 space-y-4 mb-4 relative"><button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button><input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">存款年利率 %</p><input type="number" data-field="InterestRate" value="${s.InterestRate || 0}" step="0.1" class="w-full bg-transparent text-sm font-bold outline-none"></div></div>`).join(''); }
 
-        // [L552-640] UI 交互與提交通道
         function toggleRankingCriteria() { rankingSortBy = rankingSortBy === 'profit' ? 'roi' : 'profit'; const btn = document.getElementById('sort-criteria-btn'); btn.innerText = rankingSortBy === 'profit' ? '按金額' : '按報酬率'; btn.className = `text-[9px] font-black px-3 py-1.5 rounded-lg btn-press transition-colors ${rankingSortBy === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`; renderAnalysis(); }
         function toggleRankingDirection() { rankingSortOrder = rankingSortOrder === 'desc' ? 'asc' : 'desc'; document.getElementById('sort-direction-btn').innerText = rankingSortOrder === 'desc' ? '↓ 最大值' : '↑ 最小值'; renderAnalysis(); }
         function addNewAccount(cat) { if (!ledgerData.settings) ledgerData.settings = []; ledgerData.settings.unshift({ AccountName: "新" + cat + Math.floor(Math.random() * 100), Category: cat, LinkedBank: "", DiscountRate: 100, MinFee: 20, InterestRate: 0 }); renderSettings(); }
@@ -366,20 +348,17 @@
         function closeConfirmModal() { document.getElementById('confirmModal').classList.add('hidden'); }
         function executeRemoveAccount() { if (accountToDelete) { ledgerData.settings = ledgerData.settings.filter(s => s.AccountName !== accountToDelete); renderSettings(); closeConfirmModal(); showToast("已刪除 (請儲存)"); } }
         async function saveAllSettings() { const btn = document.getElementById('btn-save-settings'); btn.innerText = "同步中..."; const final = []; document.querySelectorAll('#view-settings .glass-card').forEach(card => { const inputs = card.querySelectorAll('[data-field]'); if (!inputs.length) return; const isBroker = card.querySelector('input').classList.contains('text-blue-600'); const obj = { Category: isBroker ? '券商' : '銀行' }; inputs.forEach(i => obj[i.dataset.field] = i.value); final.push(obj); }); try { await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateSettings", settings: final }) }); showToast("同步成功"); fetchData(); } catch (e) { showToast("儲存失敗"); } finally { btn.innerText = "儲存並同步雲端"; } }
-        async function submitToSheet() { if (isSubmitting) return; const prc = document.getElementById('input-price').value; if (!prc) return showToast("請填金額"); isSubmitting = true; document.getElementById('submit-text').innerText = "同步中..."; try { let payload = isEditMode ? { action: 'updateTransaction', index: txIndexToModify } : {}; if (currentType === '轉帳') { payload = { ...payload, action: isEditMode ? 'updateTransaction' : 'transfer', fromAccount: currentAccount, toAccount: document.getElementById('input-to-account').value, amount: prc, date: document.getElementById('input-date').value, memo: document.getElementById('input-memo').value }; } else { payload = { ...payload, type: currentType, symbol: document.getElementById('input-symbol').value, quantity: (currentType==='除權息'?1:document.getElementById('input-qty').value), price: prc, date: document.getElementById('input-date').value, account: currentAccount, fee: document.getElementById('input-fee').value, tax: document.getElementById('input-tax').value, memo: document.getElementById('input-memo').value }; } const res = await (await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) })).json(); if (res.status === "success") { showToast("操作成功"); toggleAddModal(); fetchData(); } } catch (e) { showToast("儲存失敗"); } finally { isSubmitting = false; document.getElementById('submit-text').innerText = "確認並儲存"; } }
-        function setType(t) { currentType = (t === '轉帳' || t === '除權息') ? (isBrokerMode ? '除權息' : '轉帳') : t; const bBuy = document.getElementById('type-buy'), bSell = document.getElementById('type-sell'), bThird = document.getElementById('type-third'); [bBuy, bSell, bThird].forEach(b => b.className = "flex-1 py-4 rounded-[18px] font-black text-slate-400 transition-all bg-transparent"); const symArea = document.getElementById('symbol-area'), transArea = document.getElementById('transfer-target-area'), qpArea = document.getElementById('qty-price-area'), settArea = document.getElementById('settlement-area'), bFields = document.getElementById('broker-only-fields'); if (currentType === '轉帳') { bThird.className = "flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm text-blue-600"; symArea.classList.add('hidden'); transArea.classList.remove('hidden'); qpArea.classList.remove('grid-cols-2'); document.getElementById('input-qty').classList.add('hidden'); document.getElementById('input-price').placeholder = "轉帳金額"; settArea.classList.add('hidden'); bFields.classList.add('hidden'); } else if (currentType === '除權息') { bThird.className = "flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm text-blue-600"; symArea.classList.remove('hidden'); transArea.classList.add('hidden'); qpArea.classList.remove('grid-cols-2'); document.getElementById('input-qty').classList.add('hidden'); document.getElementById('input-price').placeholder = "領取總額"; settArea.classList.add('hidden'); bFields.classList.add('hidden'); } else { const isP = (t === '買入' || t === '存入'); (isP ? bBuy : bSell).className = `flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm ${isP?'text-blue-600':'text-red-500'}`; symArea.classList.remove('hidden'); transArea.classList.add('hidden'); qpArea.classList.add('grid-cols-2'); document.getElementById('input-qty').classList.remove('hidden'); document.getElementById('input-price').placeholder = "單價 / 總額"; settArea.classList.toggle('hidden', !isBrokerMode); bFields.classList.toggle('hidden', !isBrokerMode); } runAutoCalc(); }
-        function handleAddClick() { if (currentAccount === "全部帳戶") return showToast("請先選擇帳戶"); isEditMode = false; document.getElementById('submit-text').innerText = "確認並儲存"; document.getElementById('modal-title').innerText = "新增紀錄"; 
-            // [更新 v2.2.5] 新增模式顯示帳戶餘額
-            document.getElementById('modal-acc-balance').classList.remove('hidden');
-            const acc = ledgerData.settings.find(s => s.AccountName === currentAccount); isBrokerMode = (acc && acc.Category === '券商'); document.getElementById('type-buy').innerText = isBrokerMode ? "買入" : "存入"; document.getElementById('type-sell').innerText = isBrokerMode ? "賣出" : "提領"; document.getElementById('type-third').innerText = isBrokerMode ? "除權息" : "轉帳"; document.getElementById('type-third').classList.toggle('hidden', false); let displayBal = parseSafeInt(ledgerData.accountBalances[currentAccount]); if (isBrokerMode && acc.LinkedBank) displayBal = parseSafeInt(ledgerData.accountBalances[acc.LinkedBank]); document.getElementById('modal-acc-balance').innerText = `可用資金: $${displayBal.toLocaleString()}`; const toAcc = document.getElementById('input-to-account'); toAcc.innerHTML = `<option value="">選擇目標銀行</option>` + ledgerData.settings.filter(s => s.Category === '銀行' && s.AccountName !== currentAccount).map(s => `<option value="${s.AccountName}">${s.AccountName}</option>`).join(''); setType(isBrokerMode ? '買入' : '存入'); document.getElementById('addModal').classList.remove('hidden'); }
+        async function submitToSheet() { if (isSubmitting) return; const prc = document.getElementById('input-price').value; if (!prc) return showToast("請填金額"); isSubmitting = true; document.getElementById('submit-text').innerText = "同步中..."; try { let payload = isEditMode ? { action: 'updateTransaction', index: txIndexToModify } : {}; let finalType = currentType; if (!isBrokerMode) { if (currentType === '買入') finalType = '存入'; if (currentType === '賣出') finalType = '提領'; } if (currentType === '轉帳') { payload = { ...payload, action: isEditMode ? 'updateTransaction' : 'transfer', fromAccount: currentAccount, toAccount: document.getElementById('input-to-account').value, amount: prc, date: document.getElementById('input-date').value, memo: document.getElementById('input-memo').value }; } else { payload = { ...payload, type: finalType, symbol: document.getElementById('input-symbol').value, quantity: (currentType==='除權息'?1:document.getElementById('input-qty').value), price: prc, date: document.getElementById('input-date').value, account: currentAccount, fee: document.getElementById('input-fee').value, tax: document.getElementById('input-tax').value, memo: document.getElementById('input-memo').value }; } const res = await (await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) })).json(); if (res.status === "success") { document.getElementById('submit-text').innerText = isEditMode ? "修改成功" : "儲存成功"; showToast(isEditMode ? "修改成功" : "儲存成功"); setTimeout(() => { toggleAddModal(); fetchData(); }, 800); } } catch (e) { showToast("儲存失敗"); isSubmitting = false; document.getElementById('submit-text').innerText = "確認並儲存"; } }
+        function setType(t) { let targetType = t; if (t === '買入' || t === '存入') targetType = isBrokerMode ? '買入' : '存入'; else if (t === '賣出' || t === '提領') targetType = isBrokerMode ? '賣出' : '提領'; else targetType = isBrokerMode ? '除權息' : '轉帳'; currentType = targetType; const bBuy = document.getElementById('type-buy'), bSell = document.getElementById('type-sell'), bThird = document.getElementById('type-third'); [bBuy, bSell, bThird].forEach(b => b.className = "flex-1 py-4 rounded-[18px] font-black text-slate-400 transition-all bg-transparent"); const symArea = document.getElementById('symbol-area'), transArea = document.getElementById('transfer-target-area'), qpArea = document.getElementById('qty-price-area'), settArea = document.getElementById('settlement-area'), bFields = document.getElementById('broker-only-fields'); if (currentType === '轉帳') { bThird.className = "flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm text-blue-600"; symArea.classList.add('hidden'); transArea.classList.remove('hidden'); qpArea.classList.remove('grid-cols-2'); document.getElementById('input-qty').classList.add('hidden'); document.getElementById('input-price').placeholder = "轉帳金額"; settArea.classList.add('hidden'); bFields.classList.add('hidden'); } else if (currentType === '除權息') { bThird.className = "flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm text-blue-600"; symArea.classList.remove('hidden'); transArea.classList.add('hidden'); qpArea.classList.remove('grid-cols-2'); document.getElementById('input-qty').classList.add('hidden'); document.getElementById('input-price').placeholder = "領取總額"; settArea.classList.add('hidden'); bFields.classList.add('hidden'); } else { const isP = (currentType === '買入' || currentType === '存入'); (isP ? bBuy : bSell).className = `flex-1 py-4 rounded-[18px] font-black bg-white shadow-sm ${isP?'text-blue-600':'text-red-500'}`; symArea.classList.remove('hidden'); transArea.classList.add('hidden'); qpArea.classList.add('grid-cols-2'); document.getElementById('input-qty').classList.remove('hidden'); document.getElementById('input-price').placeholder = "單價 / 總額"; settArea.classList.toggle('hidden', !isBrokerMode); bFields.classList.toggle('hidden', !isBrokerMode); } runAutoCalc(); }
+        function handleAddClick() { if (currentAccount === "全部帳戶") return showToast("請先選擇帳戶"); isEditMode = false; document.getElementById('submit-text').innerText = "確認並儲存"; document.getElementById('modal-title').innerText = "新增紀錄"; document.getElementById('modal-acc-balance').classList.remove('hidden'); const acc = ledgerData.settings.find(s => s.AccountName === currentAccount); isBrokerMode = (acc && acc.Category === '券商'); document.getElementById('type-buy').innerText = isBrokerMode ? "買入" : "存入"; document.getElementById('type-sell').innerText = isBrokerMode ? "賣出" : "提領"; document.getElementById('type-third').innerText = isBrokerMode ? "除權息" : "轉帳"; document.getElementById('type-third').classList.toggle('hidden', false); let displayBal = parseSafeInt(ledgerData.accountBalances[currentAccount]); if (isBrokerMode && acc.LinkedBank) displayBal = parseSafeInt(ledgerData.accountBalances[acc.LinkedBank]); document.getElementById('modal-acc-balance').innerText = `可用資金: $${displayBal.toLocaleString()}`; const toAcc = document.getElementById('input-to-account'); toAcc.innerHTML = `<option value="">選擇目標銀行</option>` + ledgerData.settings.filter(s => s.Category === '銀行' && s.AccountName !== currentAccount).map(s => `<option value="${s.AccountName}">${s.AccountName}</option>`).join(''); setType(isBrokerMode ? '買入' : '存入'); document.getElementById('addModal').classList.remove('hidden'); }
         function runAutoCalc() { if (!isBrokerMode || currentType === '轉帳' || currentType === '除權息') return; const sym = document.getElementById('input-symbol').value, q = parseFloat(document.getElementById('input-qty').value) || 0, p = parseFloat(document.getElementById('input-price').value) || 0, tot = q * p; const s = (ledgerData.settings || []).find(x => x.AccountName === currentAccount) || { DiscountRate: 100, MinFee: 20 }; let f = tot > 0 ? Math.max(Math.round(tot * 0.001425 * (parseFloat(s.DiscountRate) / 100)), parseInt(s.MinFee || 0)) : 0; let t = currentType === '賣出' ? Math.floor(tot * (sym.startsWith('00') || sym.startsWith('01') ? 0.001 : 0.003)) : 0; document.getElementById('input-fee').value = f; document.getElementById('input-tax').value = t; updateSettlementOnly(); }
         function updateSettlementOnly() { const q = parseFloat(document.getElementById('input-qty').value) || 0, p = parseFloat(document.getElementById('input-price').value) || 0, f = parseFloat(document.getElementById('input-fee').value) || 0, t = parseFloat(document.getElementById('input-tax').value) || 0; let s = currentType === '買入' ? (q*p + f) : (q*p - f - t); document.getElementById('input-settlement').innerText = '$ ' + Math.round(s).toLocaleString(); }
         function switchView(view) { ['view-assets', 'view-analysis', 'view-settings'].forEach(v => document.getElementById(v).classList.add('hidden')); ['foot-assets', 'foot-analysis', 'foot-settings'].forEach(f => { const el = document.getElementById(f); if (el) el.className = 'flex flex-col items-center text-slate-300 opacity-60'; }); document.getElementById('view-' + view).classList.remove('hidden'); document.getElementById('foot-' + view).className = 'flex flex-col items-center text-blue-600 transition-colors'; document.getElementById('main-header').classList.toggle('hidden', view !== 'assets'); if (view === 'analysis') setTimeout(renderAnalysis, 150); }
-        function switchTab(t) { const isP = t === 'portfolio'; document.getElementById('content-portfolio').classList.toggle('hidden', !isP); document.getElementById('content-transactions').classList.toggle('hidden', isP); document.getElementById('tab-portfolio').className = `flex-1 py-3.5 text-xs font-black rounded-[20px] tab-btn ${isP?'active':'text-slate-400'}`; document.getElementById('tab-transactions').className = `flex-1 py-3.5 text-xs font-black rounded-[20px] tab-btn ${!isP?'active':'text-slate-400'}`; }
+        function switchTab(t) { const isP = t === 'portfolio'; document.getElementById('content-portfolio').classList.toggle('hidden', !isP); document.getElementById('content-transactions').classList.toggle('hidden', isP); document.getElementById('tab-portfolio').className = `flex-1 py-3.5 text-xs font-black rounded-[20px] tab-btn ${isP?'active':'text-slate-400'}`; document.getElementById('tab-transactions').className = `flex-1 py-3.5 text-xs font-black rounded-[20px] tab-btn ${!isP?'active':'text-slate-400'}`; if (!isP) fetchData(); }
         function selectAccount(a, cat) { currentAccount = a; currentCategory = cat; updateAccountUI(); renderDashboard(); }
         function parseSafeInt(v) { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : Math.floor(n); }
         function parseSafeFloat(v) { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; }
-        function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2500); }
+        function showToast(m) { const t = document.getElementById('toast'); if(!t) return; t.innerText = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2500); }
         function toggleAddModal() { document.getElementById('addModal').classList.toggle('hidden'); if(document.getElementById('addModal').classList.contains('hidden')) { document.querySelectorAll('#addModal input').forEach(i => i.value = ""); } }
         function updateAccountUI() { const sw = document.getElementById('account-switcher'); if (!sw) return; sw.innerHTML = `<button onclick="selectAccount('全部帳戶', 'all')" class="acc-tab px-5 py-2.5 rounded-2xl text-xs font-black ${currentAccount === '全部帳戶' ? 'acc-tab-active' : 'text-white/50'} whitespace-nowrap">全部帳戶</button>` + (ledgerData.settings || []).map(a => `<button onclick="selectAccount('${a.AccountName}', '${a.Category}')" class="acc-tab px-5 py-2.5 rounded-2xl text-xs font-black ${currentAccount === a.AccountName ? 'acc-tab-active' : 'text-white/50'} whitespace-nowrap">${a.AccountName}</button>`).join(''); }
     </script>

@@ -2,14 +2,14 @@
 <html lang="zh-TW">
 <head>
     <!-- 
-      版本: v2.0.0 Pro (Linked Intelligence & Deep Allocation)
-      開發狀態: 基準穩定版 (Base Stable)
+      版本: v2.1.1 Pro (Chart Logic Fix)
+      開發狀態: 穩定功能版
       修正內容:
-      1. 銀行/券商雙向連動：銀行介面現在會穿透顯示連動交割帳戶的持股價值與損益。
-      2. 深度資產圓餅圖：配置圖升級為「現金+所有個股」之精細分佈，不再只是二分法。
-      3. 圓餅圖互動優化：解決邊緣切到問題，隱藏靜態標籤，改為「點擊區塊顯示詳情」。
-      4. UI 佈局維持： TL:市值、TR:年化/簡單報酬率、BL:已實現損益、BR:未實現損益。
-      5. 核心功能保留：交易備註、新增置頂、刪除確認、i17 長螢幕比例優化。
+      1. 修復 TypeError (getContext)：加入圖表畫布存在性檢查，防止分析頁面渲染崩潰。
+      2. 銀行穿透連動：維持銀行介面穿透顯示連動券商市值與損益。
+      3. 深度資產配置：維持圓餅圖「現金+個股」詳細比例顯示。
+      4. 排序控制：維持按金額/報酬率、最大/最小值的點選切換按鈕。
+      5. 穩定性：優化 Chart.js 實例管理，解決切換分頁時圖表消失或錯誤的問題。
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -31,28 +31,18 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .tab-btn.active { color: var(--primary-blue); background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        select { -webkit-appearance: none; appearance: none; }
-        .chart-container { position: relative; width: 100%; height: 220px; }
-        .allocation-container { position: relative; width: 100%; max-width: 250px; margin: 0 auto; padding: 10px; }
-        .pie-chart-container { position: relative; width: 100%; max-width: 200px; margin: 0 auto; aspect-ratio: 1/1; }
+        .chart-wrapper { position: relative; width: 100%; max-width: 250px; aspect-ratio: 1/1; margin: 0 auto; padding: 15px; }
     </style>
 </head>
 <body class="pb-40">
     <div class="fixed top-0 w-full bg-blue-600 h-[var(--safe-top)] z-[60]"></div>
     
-    <!-- [UI] 頂部 Header -->
+    <!-- [UI] Header -->
     <header id="main-header" class="bg-blue-600 text-white sticky top-[var(--safe-top)] z-50 rounded-b-[48px] shadow-2xl transition-all duration-300">
         <div class="flex justify-between items-center px-8 pt-4 pb-4">
-            <button onclick="fetchData()" class="w-11 h-11 flex items-center justify-center bg-white/15 rounded-2xl btn-press">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="refresh-icon"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
-            </button>
-            <div class="text-center">
-                <h1 class="text-[11px] uppercase tracking-[0.3em] opacity-70 font-black mb-0.5">財富成長</h1>
-                <p id="total-assets" class="text-2xl font-black tabular-nums tracking-tighter">$ 0</p>
-            </div>
-            <button onclick="handleAddClick()" class="w-11 h-11 flex items-center justify-center bg-white rounded-2xl text-blue-600 shadow-xl btn-press">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
+            <button onclick="fetchData()" class="w-11 h-11 flex items-center justify-center bg-white/15 rounded-2xl btn-press"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="refresh-icon"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg></button>
+            <div class="text-center"><h1 class="text-[11px] uppercase tracking-[0.3em] opacity-70 font-black mb-0.5">財富成長</h1><p id="total-assets" class="text-2xl font-black tabular-nums tracking-tighter">$ 0</p></div>
+            <button onclick="handleAddClick()" class="w-11 h-11 flex items-center justify-center bg-white rounded-2xl text-blue-600 shadow-xl btn-press"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         </div>
         <div class="px-4 pb-8" id="header-switcher-area">
             <div id="account-switcher" class="flex gap-3 overflow-x-auto no-scrollbar px-2 py-1 items-center">
@@ -62,29 +52,16 @@
     </header>
 
     <main class="max-w-md mx-auto p-5 space-y-7">
-        <!-- [UI] 資產主視圖 -->
         <div id="view-assets" class="space-y-7">
             <!-- 損益儀表板 -->
             <section class="glass-card p-7 grid grid-cols-2 gap-4">
                 <div class="space-y-4">
-                    <div>
-                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">庫存市值</p>
-                        <p id="stock-market-value" class="text-xl font-black text-slate-800 tracking-tight">--</p>
-                    </div>
-                    <div>
-                        <p class="text-[9px] text-blue-400 font-black uppercase tracking-wider mb-1">已實現損益 (含息)</p>
-                        <p id="realized-profit" class="text-xl font-black text-blue-600 tracking-tight">--</p>
-                    </div>
+                    <div><p class="text-[9px] text-slate-400 font-black uppercase mb-1">庫存市值</p><p id="stock-market-value" class="text-xl font-black text-slate-800 tracking-tight">--</p></div>
+                    <div><p class="text-[9px] text-blue-400 font-black uppercase mb-1">已實現損益 (含息)</p><p id="realized-profit" class="text-xl font-black text-blue-600 tracking-tight">--</p></div>
                 </div>
                 <div class="space-y-4 text-right border-l border-slate-100 pl-6">
-                    <div>
-                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">年化 / 簡單報酬</p>
-                        <p id="total-roi" class="text-[17px] font-black tracking-tight text-slate-700">--% / --%</p>
-                    </div>
-                    <div>
-                        <p class="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1">未實現損益</p>
-                        <p id="total-profit" class="text-xl font-black tracking-tight">--</p>
-                    </div>
+                    <div><p class="text-[9px] text-slate-400 font-black uppercase mb-1">年化 / 簡單報酬</p><p id="total-roi" class="text-[17px] font-black tracking-tight text-slate-700">--% / --%</p></div>
+                    <div><p class="text-[9px] text-slate-400 font-black uppercase mb-1">未實現損益</p><p id="total-profit" class="text-xl font-black tracking-tight">--</p></div>
                 </div>
             </section>
             
@@ -100,35 +77,26 @@
             </nav>
 
             <div id="content-portfolio" class="space-y-6">
-                <!-- [更新 v2.0.0] 修正切邊問題並提升為個股級圓餅圖 -->
                 <div class="glass-card p-6 flex flex-col items-center">
-                    <div class="allocation-container">
-                        <canvas id="chart-asset-allocation"></canvas>
-                    </div>
+                    <div class="chart-wrapper"><canvas id="chart-asset-allocation"></canvas></div>
                 </div>
-                <div id="holdings-list-area" class="space-y-4">
-                    <div class="flex justify-between items-center px-2">
-                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">標的分佈明細</h3>
-                        <div class="h-[1px] flex-1 bg-slate-100 mx-4"></div>
-                    </div>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center px-2"><h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">標的分佈明細</h3><div class="h-[1px] flex-1 bg-slate-100 mx-4"></div></div>
                     <div id="holdings-container" class="space-y-4"></div>
                 </div>
             </div>
             <div id="content-transactions" class="hidden space-y-4"></div>
         </div>
 
-        <!-- [UI] 分析視圖 -->
         <div id="view-analysis" class="hidden space-y-12 fade-in pb-20">
             <div class="px-2 pt-6"><h2 class="text-3xl font-black text-slate-800">資產深度分析</h2></div>
-            <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">財富成長趨勢</h3><div class="glass-card p-6"><div class="chart-container"><canvas id="chart-networth-trend"></canvas></div></div></section>
-            <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">持股資產占比</h3><div class="glass-card p-8 flex flex-col items-center"><div class="pie-chart-container"><canvas id="chart-stock-pie"></canvas></div><div id="analysis-stock-list" class="w-full mt-8 space-y-3"></div></div></section>
+            <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">財富成長趨勢</h3><div class="glass-card p-6"><div class="chart-container" style="height: 220px;"><canvas id="chart-networth-trend"></canvas></div></div></section>
+            <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">持股資產占比</h3><div class="glass-card p-8 flex flex-col items-center"><div class="pie-chart-container" style="max-width: 180px;"><canvas id="chart-stock-pie"></canvas></div><div id="analysis-stock-list" class="w-full mt-8 space-y-3"></div></div></section>
             <section class="space-y-4"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">銀行資金占比</h3><div class="glass-card p-8 flex flex-col items-center"><div class="pie-chart-container" style="max-width: 180px;"><canvas id="chart-bank-pie"></canvas></div><div id="analysis-bank-list" class="w-full mt-8 space-y-3"></div></div></section>
-            
             <section class="space-y-4">
-                <div class="flex justify-between items-center px-2">
-                    <h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股損益排行</h3>
+                <div class="flex justify-between items-center px-2"><h3 class="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股損益排行</h3>
                     <div class="flex gap-2">
-                        <button id="sort-criteria-btn" onclick="toggleRankingCriteria()" class="text-[9px] font-black bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg btn-press transition-colors">按金額</button>
+                        <button id="sort-criteria-btn" onclick="toggleRankingCriteria()" class="text-[9px] font-black bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg btn-press">按金額</button>
                         <button id="sort-direction-btn" onclick="toggleRankingDirection()" class="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg btn-press">↓ 最大值</button>
                     </div>
                 </div>
@@ -136,7 +104,6 @@
             </section>
         </div>
 
-        <!-- [UI] 設定視圖 -->
         <div id="view-settings" class="hidden space-y-10 fade-in pb-20">
             <div class="px-2 pt-6"><h2 class="text-3xl font-black text-slate-800">帳戶設定</h2></div>
             <section class="space-y-4"><div id="settings-broker-list" class="space-y-5 px-1"></div></section>
@@ -145,72 +112,46 @@
         </div>
     </main>
 
-    <!-- [UI] 底部導覽列 -->
-    <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-40 transition-all duration-300" style="padding-bottom: calc(15px + var(--safe-bottom))">
-        <button onclick="switchView('assets')" id="foot-assets" class="flex flex-col items-center text-blue-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" ry="2"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg><span class="text-[9px] font-black mt-1">資產</span></button>
-        <button onclick="switchView('analysis')" id="foot-analysis" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg><span class="text-[9px] font-black mt-1">分析</span></button>
-        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span class="text-[9px] font-black mt-1">設定</span></button>
+    <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-40" style="padding-bottom: calc(15px + var(--safe-bottom))">
+        <button onclick="switchView('assets')" id="foot-assets" class="flex flex-col items-center text-blue-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" ry="2"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg><span class="text-[9px] font-black mt-1">資產</span></button>
+        <button onclick="switchView('analysis')" id="foot-analysis" class="flex flex-col items-center text-slate-300 opacity-60"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg><span class="text-[9px] font-black mt-1">分析</span></button>
+        <button onclick="switchView('settings')" id="foot-settings" class="flex flex-col items-center text-slate-300 opacity-60"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span class="text-[9px] font-black mt-1">設定</span></button>
     </footer>
 
-    <!-- [UI] 新增紀錄彈窗 -->
-    <div id="addModal" class="fixed inset-0 bg-slate-900/60 z-[100] hidden flex items-end justify-center backdrop-blur-md transition-all">
+    <!-- [UI] 彈窗組件 -->
+    <div id="addModal" class="fixed inset-0 bg-slate-900/60 z-[100] hidden flex items-end justify-center backdrop-blur-md">
         <div class="bg-white w-full max-w-md rounded-t-[40px] p-10 shadow-2xl overflow-y-auto max-h-[92vh] modal-animate no-scrollbar">
             <div class="w-14 h-2 bg-slate-100 rounded-full mx-auto mb-10"></div>
-            <div class="flex justify-between items-start mb-6">
-                <div><h2 class="text-2xl font-black text-slate-800" id="modal-title">新增紀錄</h2><p class="text-xs font-bold text-blue-600 mt-1" id="modal-acc-balance">帳戶餘額: $0</p></div>
-                <button onclick="toggleAddModal()" class="p-2 text-slate-300 text-3xl font-light">&times;</button>
-            </div>
+            <div class="flex justify-between items-start mb-6"><div><h2 class="text-2xl font-black text-slate-800" id="modal-title">新增紀錄</h2><p class="text-xs font-bold text-blue-600 mt-1" id="modal-acc-balance">帳戶餘額: $0</p></div><button onclick="toggleAddModal()" class="p-2 text-slate-300 text-3xl font-light">&times;</button></div>
             <div class="space-y-7">
-                <div id="type-switcher" class="flex gap-2 p-2 bg-slate-100 rounded-[22px]">
-                    <button id="type-buy" onclick="setType('買入')" class="flex-1 py-4 rounded-[18px] font-black transition-all">買入</button>
-                    <button id="type-sell" onclick="setType('賣出')" class="flex-1 py-4 rounded-[18px] font-black transition-all">賣出</button>
-                    <button id="type-third" onclick="setType('轉帳')" class="hidden flex-1 py-4 rounded-[18px] font-black transition-all">轉帳</button>
-                </div>
+                <div id="type-switcher" class="flex gap-2 p-2 bg-slate-100 rounded-[22px]"><button id="type-buy" onclick="setType('買入')" class="flex-1 py-4 rounded-[18px] font-black transition-all">買入</button><button id="type-sell" onclick="setType('賣出')" class="flex-1 py-4 rounded-[18px] font-black transition-all">賣出</button><button id="type-third" onclick="setType('轉帳')" class="hidden flex-1 py-4 rounded-[18px] font-black transition-all">轉帳</button></div>
                 <div class="space-y-5">
                     <div id="symbol-area"><input type="text" id="input-symbol" oninput="runAutoCalc()" placeholder="標代號或類別" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500"></div>
                     <div id="transfer-target-area" class="hidden"><label class="text-[10px] font-black text-slate-400 ml-2 mb-2 block uppercase tracking-widest">目標銀行</label><select id="input-to-account" class="w-full bg-slate-50 p-5 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"></select></div>
-                    <div class="grid grid-cols-2 gap-4" id="qty-price-area">
-                        <input type="number" id="input-qty" oninput="runAutoCalc()" placeholder="數量" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500">
-                        <input type="number" id="input-price" oninput="runAutoCalc()" placeholder="單價 / 總額" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500">
-                    </div>
-                    <div id="broker-only-fields" class="space-y-4 hidden">
-                        <div class="grid grid-cols-2 gap-4 text-center">
-                            <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-bold opacity-40 uppercase">預估手續費</p><input type="number" id="input-fee" oninput="updateSettlementOnly()" class="w-full bg-transparent font-black text-lg outline-none text-center" value="0"></div>
-                            <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-bold opacity-40 uppercase">預估交易稅</p><input type="number" id="input-tax" oninput="updateSettlementOnly()" class="w-full bg-transparent font-black text-lg outline-none text-center" value="0"></div>
-                        </div>
-                    </div>
-                    <div id="settlement-area" class="hidden bg-blue-50 p-6 rounded-3xl text-center border border-blue-100 transition-all">
-                        <p id="settlement-label" class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">預估交割金額</p>
-                        <p id="input-settlement" class="text-3xl font-black text-blue-600 tracking-tighter">$ 0</p>
-                    </div>
+                    <div class="grid grid-cols-2 gap-4" id="qty-price-area"><input type="number" id="input-qty" oninput="runAutoCalc()" placeholder="數量" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500"><input type="number" id="input-price" oninput="runAutoCalc()" placeholder="單價 / 總額" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500"></div>
+                    <div id="broker-only-fields" class="space-y-4 hidden"><div class="grid grid-cols-2 gap-4 text-center"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-bold opacity-40 uppercase">預估手續費</p><input type="number" id="input-fee" oninput="updateSettlementOnly()" class="w-full bg-transparent font-black text-lg outline-none text-center" value="0"></div><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-bold opacity-40 uppercase">預估交易稅</p><input type="number" id="input-tax" oninput="updateSettlementOnly()" class="w-full bg-transparent font-black text-lg outline-none text-center" value="0"></div></div></div>
+                    <div id="settlement-area" class="hidden bg-blue-50 p-6 rounded-3xl text-center border border-blue-100 transition-all"><p id="settlement-label" class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">預估交割金額</p><p id="input-settlement" class="text-3xl font-black text-blue-600 tracking-tighter">$ 0</p></div>
                     <div id="memo-area"><input type="text" id="input-memo" placeholder="交易備註 (選填)" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500"></div>
                     <input type="date" id="input-date" class="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none">
                 </div>
-                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-6 rounded-[30px] font-black btn-press shadow-xl text-lg text-center"><span id="submit-text">確認並儲存</span></button>
+                <button onclick="submitToSheet()" id="btn-submit" class="w-full bg-blue-600 text-white py-6 rounded-[30px] font-black btn-press shadow-xl text-lg flex items-center justify-center gap-2"><span id="submit-text">確認並儲存</span></button>
             </div>
         </div>
     </div>
 
-    <!-- [UI] 刪除確認彈窗 -->
-    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 z-[110] hidden flex items-center justify-center backdrop-blur-sm transition-all">
-        <div class="bg-white w-[85%] max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 class="text-xl font-black text-slate-800 mb-2">確認刪除帳戶？</h3><p class="text-sm text-slate-500 font-bold mb-8" id="confirm-msg">操作無法復原。</p><div class="flex gap-3"><button onclick="closeConfirmModal()" class="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button id="btn-confirm-delete" class="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg shadow-red-200 active:scale-95 transition-all">確認刪除</button></div></div>
-    </div>
-
-    <div id="toast" class="fixed top-14 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-10 py-5 rounded-full text-sm font-bold shadow-2xl opacity-0 pointer-events-none transition-all duration-300"></div>
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 z-[110] hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white w-[85%] max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 class="text-xl font-black text-slate-800 mb-2">確認刪除帳戶？</h3><p class="text-sm text-slate-500 font-bold mb-8" id="confirm-msg">操作無法復原。</p><div class="flex gap-3"><button onclick="closeConfirmModal()" class="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button id="btn-confirm-delete" class="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg shadow-red-200 active:scale-95 transition-all">確認刪除</button></div></div></div>
 
     <script>
-        // [L208-219] 核心變數與初始化
+        // [L200-211] 核心變數
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         let ledgerData = { summary: {}, transactions: [], accountBalances: {}, settings: [], inventory: [] };
         let currentAccount = "全部帳戶", currentCategory = "all", currentType = "買入", isSubmitting = false, isBrokerMode = false;
-        let trendChart = null, bankPie = null, stockPie = null, allocationChart = null; 
-        let accountToDelete = null;
-        let rankingSortBy = 'profit'; 
-        let rankingSortOrder = 'desc'; 
+        let trendChart = null, stockPie = null, bankPie = null, allocationChart = null; 
+        let accountToDelete = null, rankingSortBy = 'profit', rankingSortOrder = 'desc';
 
         window.onload = () => { fetchData(); document.getElementById('input-date').value = new Date().toISOString().split('T')[0]; };
 
-        // [L221-244] 資料同步 (fetchData)
+        // [L213-236] 資料同步
         async function fetchData() {
             const icon = document.getElementById('refresh-icon'); if (icon) icon.classList.add('animate-spin');
             try {
@@ -226,16 +167,15 @@
             } catch (e) { showToast("連線失敗"); } finally { if (icon) icon.classList.remove('animate-spin'); }
         }
 
-        // [L246-324] 損益與穿透計算引擎 (calculateIndependentStats - v2.0.0 加入連動邏輯)
+        // [L238-301] 損益與專業 ROI 引擎
         function calculateIndependentStats() {
             const txs = ledgerData.transactions || [], invData = ledgerData.inventory || [], priceMap = {}, sets = ledgerData.settings || [];
             invData.forEach(i => { if(i.代號) priceMap[i.代號] = parseSafeFloat(i.現價); });
-            
-            // [穿透邏輯] 如果是銀行，找出連動的券商帳戶
+
             let relevantAccounts = [currentAccount];
             if (currentAccount !== "全部帳戶") {
-                const isBank = sets.some(s => s.AccountName === currentAccount && s.Category === '銀行');
-                if (isBank) {
+                const setting = sets.find(s => s.AccountName === currentAccount);
+                if (setting && setting.Category === '銀行') {
                     const linkedBrokers = sets.filter(s => s.Category === '券商' && s.LinkedBank === currentAccount).map(s => s.AccountName);
                     relevantAccounts = relevantAccounts.concat(linkedBrokers);
                 }
@@ -279,17 +219,15 @@
                 if (years > 0.01) { let ratio = (maxCapital + totalProfitAll) / maxCapital; annualizedROI = ratio > 0 ? (Math.pow(ratio, 1 / years) - 1) * 100 : -100; } 
                 else annualizedROI = simpleROI;
             }
-            return { totalMarketValue, totalUnrealized, totalRealized, list: allStocksList, simpleROI, annualizedROI };
+            return { totalMarketValue, totalUnrealized, totalRealized, list: allStocksList, simpleROI, annualizedROI, relevantAccounts };
         }
 
-        // [L326-384] 儀表板渲染 (v2.0.0 加入資產配置圖更新)
+        // [L303-366] 儀表板與圓餅圖繪製
         function renderDashboard() {
-            const stats = calculateIndependentStats(), s = ledgerData.summary || {}, b = ledgerData.accountBalances || {};
-            const setting = (ledgerData.settings || []).find(x => x.AccountName === currentAccount);
-            
-            // [穿透餘額] 銀行顯示自己，券商顯示連動銀行
-            let cashBalance = currentAccount === "全部帳戶" ? parseSafeInt(s.BankBalance) : (setting?.Category === '券商' && setting.LinkedBank ? parseSafeInt(b[setting.LinkedBank]) : parseSafeInt(b[currentAccount]));
-            let totalNetWorth = cashBalance + stats.totalMarketValue;
+            const stats = calculateIndependentStats(), s = ledgerData.summary || {}, b = ledgerData.accountBalances || {}, sets = ledgerData.settings || [];
+            const setting = sets.find(x => x.AccountName === currentAccount);
+            let cash = currentAccount === "全部帳戶" ? parseSafeInt(s.BankBalance) : (setting?.Category === '券商' && setting.LinkedBank ? parseSafeInt(b[setting.LinkedBank]) : parseSafeInt(b[currentAccount]));
+            let totalNetWorth = cash + stats.totalMarketValue;
 
             document.getElementById('total-assets').innerText = `$ ${Math.round(totalNetWorth).toLocaleString()}`;
             document.getElementById('stock-market-value').innerText = `$ ${Math.round(stats.totalMarketValue).toLocaleString()}`;
@@ -297,58 +235,40 @@
             document.getElementById('realized-profit').style.color = stats.totalRealized >= 0 ? '#2563eb' : '#64748b';
             document.getElementById('total-profit').innerText = `${stats.totalUnrealized >= 0 ? '+' : ''}${Math.round(stats.totalUnrealized).toLocaleString()}`;
             document.getElementById('total-profit').style.color = stats.totalUnrealized >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
-            
-            const roiEl = document.getElementById('total-roi');
-            roiEl.innerText = `${stats.annualizedROI.toFixed(1)}% / ${stats.simpleROI.toFixed(1)}%`;
-            roiEl.style.color = stats.simpleROI >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
-
-            document.getElementById('bank-balance').innerText = `$ ${Math.round(cashBalance).toLocaleString()}`;
+            document.getElementById('total-roi').innerText = `${stats.annualizedROI.toFixed(1)}% / ${stats.simpleROI.toFixed(1)}%`;
+            document.getElementById('total-roi').style.color = stats.simpleROI >= 0 ? 'var(--stock-up)' : 'var(--stock-down)';
+            document.getElementById('bank-balance').innerText = `$ ${Math.round(cash).toLocaleString()}`;
             document.getElementById('bank-label').innerText = currentAccount === "全部帳戶" ? "可用現金 (全部)" : (setting?.Category === '券商' && setting.LinkedBank ? `${setting.LinkedBank} (連動)` : `${currentAccount} 餘額`);
             
-            // [資產配置圓餅圖 v2.0.0]
-            renderAllocationChart(cashBalance, stats.list.filter(h => h.qty > 0));
+            const liveHoldings = stats.list.filter(h => h.qty > 0);
+            renderAllocationChart(cash, liveHoldings);
             
             const container = document.getElementById('holdings-container'), invData = ledgerData.inventory || [], changeMap = {};
             invData.forEach(i => { if(i.代號) changeMap[i.代號] = { change: parseSafeFloat(i.今日漲跌), pct: parseSafeFloat(i.今日漲跌幅) }; });
-            const liveHoldings = stats.list.filter(h => h.qty > 0);
             if (!liveHoldings.length) { container.innerHTML = `<div class="glass-card p-10 text-center opacity-30 text-xs font-bold uppercase tracking-widest">目前無持股數據</div>`; }
             else {
                 container.innerHTML = liveHoldings.map(h => {
                     const daily = changeMap[h.symbol] || { change: 0, pct: 0 }, roi = (h.qty * h.avgCost) > 0 ? (h.unrealized / (h.qty * h.avgCost)) * 100 : 0;
-                    return `<div class="glass-card p-6 space-y-4 transition-all"><div class="flex justify-between items-start"><div><div class="flex items-center gap-2 mb-1"><span class="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">${h.symbol}</span><span class="text-slate-400 text-[10px] font-bold">${h.qty.toLocaleString()} 股</span></div><p class="text-2xl font-black text-slate-800 tracking-tighter">$${h.price.toLocaleString(undefined, {minimumFractionDigits: 2})}</p></div><div class="text-right"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">今日損益</p><p class="text-lg font-black ${daily.change>=0?'text-red-500':'text-green-500'}">${daily.change>=0?'+':''}${Math.round(daily.change*h.qty).toLocaleString()}<span class="text-[10px] ml-1">(${(daily.pct*100).toFixed(2)}%)</span></p></div></div><div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50"><div><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">累積損益</p><p class="font-black text-sm ${h.unrealized>=0?'text-red-500':'text-green-600'}">${h.unrealized>=0?'+':''}${Math.round(h.unrealized).toLocaleString()}</p></div><div class="text-right"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">報酬率</p><p class="font-black text-sm ${h.unrealized>=0?'text-red-500':'text-green-600'}">${roi.toFixed(2)}%</p></div></div></div>`;
+                    return `<div class="glass-card p-6 space-y-4 transition-all"><div class="flex justify-between items-start"><div><div class="flex items-center gap-2 mb-1"><span class="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">${h.symbol}</span><span class="text-slate-400 text-[10px] font-bold">${h.qty.toLocaleString()} 股</span></div><p class="text-2xl font-black text-slate-800 tracking-tighter">$${h.price.toLocaleString(undefined, {minimumFractionDigits: 2})}</p></div><div class="text-right"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">今日損益</p><p class="text-lg font-black ${daily.change>=0?'text-red-500':'text-green-500'}">${daily.change>=0?'+':''}${Math.round(daily.change*h.qty).toLocaleString()}<span class="text-[10px] ml-1">(${(daily.pct*100).toFixed(2)}%)</span></p></div></div><div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50"><div><p class="text-[9px] font-black text-slate-400 uppercase">累積損益</p><p class="font-black text-sm ${h.unrealized>=0?'text-red-500':'text-green-600'}">${h.unrealized>=0?'+':''}${Math.round(h.unrealized).toLocaleString()}</p></div><div class="text-right"><p class="text-[9px] font-black text-slate-400 uppercase">報酬率</p><p class="font-black text-sm ${h.unrealized>=0?'text-red-500':'text-green-600'}">${roi.toFixed(2)}%</p></div></div></div>`;
                 }).join('');
             }
-            renderTransactions();
+            renderTransactions(stats.relevantAccounts);
         }
 
-        // [更新 v2.0.0] 資產配置圖繪製
         function renderAllocationChart(cash, stocks) {
-            const ctx = document.getElementById('chart-asset-allocation');
-            if (!ctx) return;
+            const ctxEl = document.getElementById('chart-asset-allocation');
+            if (!ctxEl) return;
             if (allocationChart) allocationChart.destroy();
-            
-            const labels = ['現金'], data = [cash], colors = ['#0f172a']; // 現金用深色
-            stocks.forEach((s, i) => {
-                labels.push(s.symbol);
-                data.push(s.qty * s.price);
-                colors.push(['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'][i % 7]);
-            });
-
-            allocationChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 3, borderColor: '#ffffff', hoverOffset: 15 }] },
-                options: {
-                    responsive: true, maintainAspectRatio: false, cutout: '70%',
-                    plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { label: (c) => `${c.label}: $${c.raw.toLocaleString()} (${Math.round(c.raw / data.reduce((a,b)=>a+b,0) * 100)}%)` } } }
-                }
-            });
+            const labels = ['現金'], data = [cash], colors = ['#0f172a'];
+            stocks.forEach((s, i) => { labels.push(s.symbol); data.push(s.qty * s.price); colors.push(['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'][i % 7]); });
+            const ctx = ctxEl.getContext('2d');
+            allocationChart = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 4, borderColor: '#ffffff', hoverOffset: 12 }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { legend: { display: false }, tooltip: { enabled: true, backgroundColor: 'rgba(255,255,255,0.95)', titleColor: '#1e293b', bodyColor: '#1e293b', bodyFont: { weight: 'bold' }, padding: 12, cornerRadius: 15, displayColors: true, callbacks: { label: (c) => ` ${c.label}: $${c.raw.toLocaleString()} (${Math.round(c.raw / data.reduce((a,b)=>a+b,0) * 100)}%)` } } } } });
         }
 
-        // [L406-440] 歷史明細渲染
-        function renderTransactions() {
-            const t = ledgerData.transactions || [], container = document.getElementById('content-transactions');
-            if (!container) return;
-            const filtered = currentAccount === "全部帳戶" ? t : t.filter(x => x[6] === currentAccount);
+        // [L368-381] 歷史明細渲染
+        function renderTransactions(relevantAccounts) {
+            const t = ledgerData.transactions || [], container = document.getElementById('content-transactions'); if (!container) return;
+            const filtered = currentAccount === "全部帳戶" ? t : t.filter(x => relevantAccounts.includes(x[6]));
             container.innerHTML = filtered.length ? filtered.slice().reverse().map(item => {
                 if(!item || !item[0]) return '';
                 const isOut = (item[1]||'').includes('賣') || (item[1]||'').includes('提');
@@ -357,71 +277,56 @@
             }).join('') : `<p class="text-center py-20 opacity-30 text-xs font-bold uppercase">No Records</p>`;
         }
 
-        // [L442-498] 分析模組實作
+        // [L383-445] 分析模組實作 (含高級排行)
         function renderAnalysis() {
             const t = ledgerData.transactions || [], b = ledgerData.accountBalances || {}, inv = ledgerData.inventory || [], sets = ledgerData.settings || [];
-            const trendCtx = document.getElementById('chart-networth-trend').getContext('2d');
-            if (trendChart) trendChart.destroy();
-            const sortedTx = t.filter(tx => tx && tx[0]).sort((a,b) => new Date(a[0]) - new Date(b[0]));
-            let cumulative = 0; const labels = [], dataPoints = [];
-            sortedTx.forEach(tx => { const impact = (tx[1].includes('存') || tx[1].includes('買') || tx[1].includes('除')) ? (parseSafeFloat(tx[3])*parseSafeFloat(tx[4])) : -(parseSafeFloat(tx[3])*parseSafeFloat(tx[4])); cumulative += impact; labels.push(tx[0].split(' ')[0]); dataPoints.push(cumulative); });
-            trendChart = new Chart(trendCtx, { type: 'line', data: { labels, datasets: [{ data: dataPoints, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
+            const trendEl = document.getElementById('chart-networth-trend');
+            if (trendEl) {
+                const trendCtx = trendEl.getContext('2d'); if (trendChart) trendChart.destroy();
+                const sortedTx = t.filter(tx => tx && tx[0]).sort((a,b) => new Date(a[0]) - new Date(b[0]));
+                let cumulative = 0; const labels = [], dataPoints = [];
+                sortedTx.forEach(tx => { const impact = (tx[1].includes('存') || tx[1].includes('買') || tx[1].includes('除')) ? (parseSafeFloat(tx[3])*parseSafeFloat(tx[4])) : -(parseSafeFloat(tx[3])*parseSafeFloat(tx[4])); cumulative += impact; labels.push(tx[0].split(' ')[0]); dataPoints.push(cumulative); });
+                trendChart = new Chart(trendCtx, { type: 'line', data: { labels, datasets: [{ data: dataPoints, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
+            }
 
-            const stockCtx = document.getElementById('chart-stock-pie').getContext('2d'), stockList = document.getElementById('analysis-stock-list');
-            if (stockPie) stockPie.destroy();
-            const vInv = inv.filter(i => i && i.代號 && parseSafeFloat(i.現值) > 0), sLab = vInv.map(i => i.代號), sVal = vInv.map(i => parseSafeFloat(i.現值)), totalS = sVal.reduce((a,b)=>a+b, 0);
-            stockPie = new Chart(stockCtx, { type: 'pie', data: { labels: sLab, datasets: [{ data: sVal, backgroundColor: ['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-            stockList.innerHTML = vInv.map((item, i) => `<div class="flex justify-between text-[11px] font-bold"><span class="text-slate-600">${item.代號}</span><span class="text-slate-800">$${Math.round(sVal[i]).toLocaleString()} (${Math.round(sVal[i]/totalS*100)}%)</span></div>`).join('');
+            const stockEl = document.getElementById('chart-stock-pie');
+            if (stockEl) {
+                const stockCtx = stockEl.getContext('2d'); if (stockPie) stockPie.destroy();
+                const vInv = inv.filter(i => i && i.代號 && parseSafeFloat(i.現值) > 0), sLab = vInv.map(i => i.代號), sVal = vInv.map(i => parseSafeFloat(i.現值)), totalS = sVal.reduce((a,b)=>a+b, 0);
+                stockPie = new Chart(stockCtx, { type: 'pie', data: { labels: sLab, datasets: [{ data: sVal, backgroundColor: ['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de', '#ffcc00', '#5ac8fa'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+                document.getElementById('analysis-stock-list').innerHTML = vInv.map((item, i) => `<div class="flex justify-between text-[11px] font-bold"><span class="text-slate-600">${item.代號}</span><span class="text-slate-800">$${Math.round(sVal[i]).toLocaleString()} (${Math.round(sVal[i]/totalS*100)}%)</span></div>`).join('');
+            }
 
-            const bankMap = {}; sets.forEach(s => { const bal = parseSafeInt(b[s.AccountName] || 0); if (bal > 0 && s.Category === '銀行') bankMap[s.AccountName] = bal; });
-            const bankCtx = document.getElementById('chart-bank-pie').getContext('2d'), bList = document.getElementById('analysis-bank-list');
-            const bKeys = Object.keys(bankMap), bVals = Object.values(bankMap), totalB = bVals.reduce((a,b)=>a+b, 0), bCols = ['#5856d6', '#64d2ff', '#34c759', '#ff9500', '#ff2d55', '#5ac8fa'];
-            if (bankPie) bankPie.destroy();
-            bankPie = new Chart(bankCtx, { type: 'doughnut', data: { labels: bKeys, datasets: [{ data: bVals, backgroundColor: bCols, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
-            bList.innerHTML = bKeys.map((k, i) => `<div class="flex justify-between text-[11px] font-bold"><div class="flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full" style="background:${bCols[i%bCols.length]}"></div><span class="text-slate-600">${k}</span></div><span class="text-slate-400">$${bVals[i].toLocaleString()} (${Math.round(bVals[i]/totalB*100)}%)</span></div>`).join('');
+            const bankEl = document.getElementById('chart-bank-pie');
+            if (bankEl) {
+                const bankCtx = bankEl.getContext('2d'); if (bankPie) bankPie.destroy();
+                const bankMap = {}; sets.forEach(s => { const bal = parseSafeInt(b[s.AccountName] || 0); if (bal > 0 && s.Category === '銀行') bankMap[s.AccountName] = bal; });
+                const bKeys = Object.keys(bankMap), bVals = Object.values(bankMap), totalB = bVals.reduce((a,b)=>a+b, 0), bCols = ['#5856d6', '#64d2ff', '#34c759', '#ff9500', '#ff2d55', '#5ac8fa'];
+                bankPie = new Chart(bankCtx, { type: 'doughnut', data: { labels: bKeys, datasets: [{ data: bVals, backgroundColor: bCols, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
+                document.getElementById('analysis-bank-list').innerHTML = bKeys.map((k, i) => `<div class="flex justify-between text-[11px] font-bold"><div class="flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full" style="background:${bCols[i%bCols.length]}"></div><span class="text-slate-600">${k}</span></div><span class="text-slate-400">$${bVals[i].toLocaleString()} (${Math.round(bVals[i]/totalB*100)}%)</span></div>`).join('');
+            }
 
-            const ranking = document.getElementById('stock-ranking-container');
-            const stats = calculateIndependentStats();
+            const ranking = document.getElementById('stock-ranking-container'); const stats = calculateIndependentStats();
             let rData = stats.list.filter(s => s.totalProfit !== 0 || s.roi !== 0).sort((a, b) => {
-                let valA = rankingSortBy === 'profit' ? a.totalProfit : a.roi;
-                let valB = rankingSortBy === 'profit' ? b.totalProfit : b.roi;
+                let valA = rankingSortBy === 'profit' ? a.totalProfit : a.roi; let valB = rankingSortBy === 'profit' ? b.totalProfit : b.roi;
                 return rankingSortOrder === 'desc' ? valB - valA : valA - valB;
-            });
+            }).slice(0, 10);
             ranking.innerHTML = rData.map(s => {
                 const maxAbs = Math.max(...stats.list.map(x => Math.abs(rankingSortBy === 'profit' ? x.totalProfit : x.roi)), 1);
                 const width = Math.min(100, (Math.abs(rankingSortBy === 'profit' ? s.totalProfit : s.roi) / maxAbs) * 100);
                 return `<div class="space-y-1.5"><div class="flex justify-between text-[11px] font-black items-end"><span class="text-slate-500 uppercase">${s.symbol}</span><div class="text-right"><span class="${s.totalProfit>=0?'text-red-500':'text-green-600'}">${s.totalProfit>=0?'+':''}${Math.round(s.totalProfit).toLocaleString()}</span><span class="text-[9px] text-slate-400 ml-1">(${s.roi.toFixed(1)}%)</span></div></div><div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div class="${s.totalProfit>=0?'bg-red-500':'bg-green-500'} h-full transition-all duration-1000" style="width:${width}%"></div></div></div>`;
-            }).join('') || '<p class="text-center opacity-30 text-xs py-4">尚無損益排行</p>';
+            }).join('') || '<p class="text-center opacity-30 text-xs py-4">尚無盈虧數據</p>';
         }
 
-        // [L500-530] 設定模組實作 (v1.8.6 穩定邏輯)
+        // [L500-530] 設定模組實作
         function renderSettings() {
-            const bList = document.getElementById('settings-broker-list'), bkList = document.getElementById('settings-bank-list');
-            if (!bList || !bkList) return;
+            const bList = document.getElementById('settings-broker-list'), bkList = document.getElementById('settings-bank-list'); if (!bList || !bkList) return;
             const accs = ledgerData.settings || [], bData = accs.filter(s => s.Category === '券商'), bkData = accs.filter(s => s.Category === '銀行');
-            bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onclick="addNewAccount('券商')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bData.map(s => `
-                <div class="glass-card p-7 space-y-5 mb-4 relative">
-                    <button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
-                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
-                    <div class="space-y-4">
-                        <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</p>
-                        <select data-field="LinkedBank" class="w-full bg-transparent text-sm font-bold outline-none">${bkData.map(bn => `<option value="${bn.AccountName}" ${s.LinkedBank === bn.AccountName ? 'selected' : ''}>${bn.AccountName}</option>`).join('')}<option value="" ${!s.LinkedBank?'selected':''}>無</option></select></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">下單折扣</p><input type="number" data-field="DiscountRate" value="${s.DiscountRate || 100}" class="w-full bg-transparent text-sm font-bold outline-none"></div>
-                            <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">最低費</p><input type="number" data-field="MinFee" value="${s.MinFee || 20}" class="w-full bg-transparent text-sm font-bold outline-none"></div>
-                        </div>
-                    </div>
-                </div>`).join('');
-            bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onclick="addNewAccount('銀行')" class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bkData.map(s => `
-                <div class="glass-card p-7 space-y-4 mb-4 relative">
-                    <button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button>
-                    <input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg">
-                    <div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">存款年利率 %</p>
-                    <input type="number" data-field="InterestRate" value="${s.InterestRate || 0}" step="0.1" class="w-full bg-transparent text-sm font-bold outline-none"></div>
-                </div>`).join('');
+            bList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onclick="addNewAccount('券商')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bData.map(s => `<div class="glass-card p-7 space-y-5 mb-4 relative"><button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button><input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-blue-600 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg"><div class="space-y-4"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</p><select data-field="LinkedBank" class="w-full bg-transparent text-sm font-bold outline-none">${bkData.map(bn => `<option value="${bn.AccountName}" ${s.LinkedBank === bn.AccountName ? 'selected' : ''}>${bn.AccountName}</option>`).join('')}<option value="" ${!s.LinkedBank?'selected':''}>無</option></select></div><div class="grid grid-cols-2 gap-4"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">下單折扣</p><input type="number" data-field="DiscountRate" value="${s.DiscountRate || 100}" class="w-full bg-transparent text-sm font-bold outline-none"></div><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">最低費</p><input type="number" data-field="MinFee" value="${s.MinFee || 20}" class="w-full bg-transparent text-sm font-bold outline-none"></div></div></div></div>`).join('');
+            bkList.innerHTML = `<div class="flex justify-between items-center px-2 mb-3"><h3 class="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onclick="addNewAccount('銀行')" class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[9px] font-bold shadow-sm">+ 新增</button></div>` + bkData.map(s => `<div class="glass-card p-7 space-y-4 mb-4 relative"><button onclick="confirmRemoveAccount('${s.AccountName}')" class="absolute top-7 right-7 text-slate-300 text-[10px] font-black">刪除</button><input type="text" data-field="AccountName" value="${s.AccountName}" class="font-black text-slate-700 border-b pb-2 w-full pr-10 bg-transparent outline-none text-lg"><div class="bg-slate-100/50 p-4 rounded-2xl"><p class="text-[9px] font-black opacity-30 uppercase mb-1">存款年利率 %</p><input type="number" data-field="InterestRate" value="${s.InterestRate || 0}" step="0.1" class="w-full bg-transparent text-sm font-bold outline-none"></div></div>`).join('');
         }
 
-        // [L532-600] 其他輔助與控制函式
+        // [L532-605] UI 控制
         function toggleRankingCriteria() { rankingSortBy = rankingSortBy === 'profit' ? 'roi' : 'profit'; const btn = document.getElementById('sort-criteria-btn'); btn.innerText = rankingSortBy === 'profit' ? '按金額' : '按報酬率'; btn.className = `text-[9px] font-black px-3 py-1.5 rounded-lg btn-press transition-colors ${rankingSortBy === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`; renderAnalysis(); }
         function toggleRankingDirection() { rankingSortOrder = rankingSortOrder === 'desc' ? 'asc' : 'desc'; document.getElementById('sort-direction-btn').innerText = rankingSortOrder === 'desc' ? '↓ 最大值' : '↑ 最小值'; renderAnalysis(); }
         function addNewAccount(cat) { if (!ledgerData.settings) ledgerData.settings = []; ledgerData.settings.unshift({ AccountName: "新" + cat + Math.floor(Math.random() * 100), Category: cat, LinkedBank: "", DiscountRate: 100, MinFee: 20, InterestRate: 0 }); renderSettings(); }

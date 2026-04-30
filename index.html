@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>財富成長 Pro</title>
-    <!-- 載入必要庫 (CDN) -->
+    <!-- 
+      版本：v2.8.7 Pro (Smart Cash Aggregation & Restoration)
+      修改摘要：
+      1. 修正總現金加總：智慧過濾交割重疊金額，總可用現金 = 銀行餘額 + 無連動券商現金。
+      2. 解決餘額顯示：修復單一銀行選中時餘額顯示異常及「全部帳戶」排行變空值的 Bug。
+      3. 除權息拆分升級：除息自動入銀行，除權自動入券商股數，單價自動設為 0。
+      4. 排序功能全回歸：損益排行、持股占比、銀行占比均支援按金額/占比之雙向排序。
+      5. UI 高感優化：徹底隱藏 Header 滾動條，維持黃金現金色視覺 (#FFD700)。
+    -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,11 +20,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        :root { --primary-blue: #007aff; --bg-gray: #f2f2f7; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); --stock-up: #ff3b30; --stock-down: #34c759; }
-        body { background-color: var(--bg-gray); font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; padding-top: var(--safe-top); color: #1c1c1e; antialiased; }
+        :root { --primary-blue: #007aff; --bg-gray: #f2f2f7; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
+        body { background-color: var(--bg-gray); font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; padding-top: var(--safe-top); color: #1c1c1e; -webkit-font-smoothing: antialiased; }
         .glass-card { background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(25px); border-radius: 32px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04); border: 1px solid rgba(255, 255, 255, 0.5); overflow: hidden; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* 徹底隱藏滾動條 */
+        .no-scrollbar::-webkit-scrollbar { display: none !important; }
+        .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
         .modal-animate { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .fade-in { animation: fadeIn 0.4s ease-out; }
@@ -29,58 +38,33 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- [圖示組件庫] ---
         const Icons = {
-            RefreshCw: ({ className }) => (
-                <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            ),
-            Plus: ({ className }) => (
-                <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            ),
-            PieChart: ({ className, size = 24 }) => (
-                <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-            ),
-            History: ({ className, size = 24 }) => (
-                <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            ),
-            Settings: ({ className, size = 24 }) => (
-                <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            ),
-            Search: ({ className }) => (
-                <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            ),
-            TrendingUp: ({ className }) => (
-                <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>
-            ),
-            TrendingDown: ({ className }) => (
-                <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>
-            ),
-            Trash: ({ className }) => (
-                <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            ),
-            Edit: ({ className }) => (
-                <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            ),
-            Landmark: ({ className, size = 100 }) => (
-                <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7 12 2"/></svg>
-            ),
-            X: ({ className }) => (
-                <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            )
+            RefreshCw: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>,
+            Plus: ({ className }) => <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            PieChart: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
+            History: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+            Settings: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+            Search: ({ className }) => <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+            TrendingUp: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>,
+            TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
+            Trash: ({ className }) => <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+            Edit: ({ className }) => <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+            X: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+            Landmark: ({ className }) => <svg className={className} width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7 12 2"/></svg>,
+            ArrowRight: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         };
 
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
+        const parseNum = (v) => { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; };
 
-        // --- [核心計算引擎 - 確保全域唯一不衝突] ---
-        const calculateStatsCoreLogic = (dataCache, targetAcc) => {
+        // --- [全局計算引擎] ---
+        const calculateStatsCore = (dataCache, targetAcc) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
                 return { list: [], marketValue: 0, totalProfit: 0, relevantAccounts: [targetAcc] };
             }
             const priceMap = {};
-            (dataCache.inventory || []).forEach(item => {
-                const p = parseFloat(String(item.現價 || 0).replace(/[,$\s]/g, ''));
-                priceMap[item.代號] = isNaN(p) ? 0 : p;
-            });
+            (dataCache.inventory || []).forEach(item => { priceMap[item.代號] = parseNum(item.現價); });
+
             let relevantAccounts = [targetAcc];
             if (targetAcc !== '全部帳戶') {
                 const sets = dataCache.settings || [];
@@ -90,14 +74,12 @@
                     relevantAccounts = [...relevantAccounts, ...linkedBrokers];
                 }
             }
+
             const filteredTx = targetAcc === '全部帳戶' ? dataCache.transactions : dataCache.transactions.filter(t => relevantAccounts.includes(t[6]));
             const holdings = {};
+            
             filteredTx.forEach(t => {
-                const type = t[1], symbol = String(t[2] || "").trim(), 
-                      qty = parseFloat(String(t[3]||0).replace(/[,$\s]/g, '')),
-                      price = parseFloat(String(t[4]||0).replace(/[,$\s]/g, '')),
-                      fee = parseFloat(String(t[5]||0).replace(/[,$\s]/g, '')),
-                      tax = parseFloat(String(t[7]||0).replace(/[,$\s]/g, ''));
+                const type = t[1], symbol = String(t[2] || "").trim(), qty = parseNum(t[3]), price = parseNum(t[4]), fee = parseNum(t[5]), tax = parseNum(t[7]);
                 if (!symbol || ['現金','利息','存入','提領','轉帳'].includes(symbol) || symbol.includes('交割:')) return;
                 if (!holdings[symbol]) holdings[symbol] = { qty: 0, totalBuyCost: 0, buyQty: 0, realized: 0 };
                 if (type === '買入') {
@@ -107,9 +89,11 @@
                     holdings[symbol].realized += ((qty * price - fee - tax) - (qty * avgCost));
                     holdings[symbol].qty -= qty;
                 } else if (type === '除權息') {
+                    holdings[symbol].qty += qty;
                     holdings[symbol].realized += price;
                 }
             });
+
             const list = Object.keys(holdings).map(sym => {
                 const h = holdings[sym], curP = priceMap[sym] || 0, avgC = h.buyQty > 0 ? h.totalBuyCost / h.buyQty : 0;
                 const unrealized = h.qty * (curP - avgC);
@@ -117,12 +101,13 @@
                 const roi = h.totalBuyCost > 0 ? (totalProfit / h.totalBuyCost) * 100 : 0;
                 return { symbol: sym, qty: h.qty, price: curP, profit: totalProfit, roi, marketVal: h.qty * curP };
             });
+
             return { list, marketValue: list.reduce((a,b)=>a+b.marketVal, 0), totalProfit: list.reduce((a,b)=>a+b.profit, 0), relevantAccounts };
         };
 
         const App = () => {
             const [data, setData] = useState(() => {
-                const cache = localStorage.getItem('ledger_cache_v270');
+                const cache = localStorage.getItem('ledger_cache_v287');
                 return cache ? JSON.parse(cache) : { summary: {}, transactions: [], settings: [], inventory: [], accountBalances: {} };
             });
             const [loading, setLoading] = useState(false);
@@ -139,20 +124,15 @@
             const [editingIndex, setEditingIndex] = useState(-1);
             const [submitStatus, setSubmitStatus] = useState('確認並儲存');
             const [formMode, setFormMode] = useState('買入');
-            const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', fee: 0, tax: 0, memo: '', date: new Date().toISOString().split('T')[0] });
+            const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', fee: 0, tax: 0, memo: '', dividendCash: '', dividendStock: '', toAccount: '', date: new Date().toISOString().split('T')[0] });
 
-            // [排行排序狀態 - 核心功能]
-            const [rankingSortBy, setRankingSortBy] = useState('profit'); 
-            const [rankingSortOrder, setRankingSortOrder] = useState('desc');
-            const [stockPropSortOrder, setStockPropSortOrder] = useState('desc');
-            const [bankPropSortOrder, setBankPropSortOrder] = useState('desc');
+            const [rankSort, setRankSort] = useState({ by: 'profit', order: 'desc' });
+            const [stockSort, setStockSort] = useState('desc');
+            const [bankSort, setBankSort] = useState('desc');
 
             const chartRefs = useRef({ allocation: null, trend: null, stock: null, bank: null });
 
-            useEffect(() => { 
-                if (window.Chart) setChartReady(true);
-                fetchData(data.transactions.length === 0); 
-            }, []);
+            useEffect(() => { if (window.Chart) setChartReady(true); fetchData(data.transactions.length === 0); }, []);
 
             const fetchData = async (full = false) => {
                 if (full) setLoading(true);
@@ -161,64 +141,95 @@
                     const result = await res.json();
                     if (result.status === "success") {
                         setData(result.data);
-                        localStorage.setItem('ledger_cache_v270', JSON.stringify(result.data));
+                        localStorage.setItem('ledger_cache_v287', JSON.stringify(result.data));
                     }
-                } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
+                } catch (e) { showToast("更新失敗"); } finally { setLoading(false); }
             };
 
             const showToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
-            const parseNum = (v) => { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; };
 
-            const stats = useMemo(() => calculateStatsCoreLogic(data, currentAccount), [data, currentAccount]);
-            const globalStats = useMemo(() => calculateStatsCoreLogic(data, '全部帳戶'), [data]);
+            const stats = useMemo(() => calculateStatsCore(data, currentAccount), [data, currentAccount]);
+            const globalStats = useMemo(() => calculateStatsCore(data, '全部帳戶'), [data]);
 
-            // 圖表渲染
+            // 股票自動計算
+            useEffect(() => {
+                if (currentCategory === '券商' && (formMode === '買入' || formMode === '賣出')) {
+                    const q = parseNum(formData.quantity), p = parseNum(formData.price), total = q * p;
+                    if (total === 0) return;
+                    const s = (data.settings || []).find(x => x.AccountName === currentAccount) || { DiscountRate: 100, MinFee: 20 };
+                    let f = Math.max(Math.round(total * 0.001425 * (parseNum(s.DiscountRate) / 100)), parseNum(s.MinFee));
+                    let t = (formMode === '賣出') ? Math.floor(total * (formData.symbol.startsWith('00') || formData.symbol.startsWith('01') ? 0.001 : 0.003)) : 0;
+                    setFormData(prev => ({ ...prev, fee: f, tax: t }));
+                }
+            }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, data.settings]);
+
+            const settlementDisplay = useMemo(() => {
+                const q = parseNum(formData.quantity), p = parseNum(formData.price), f = parseNum(formData.fee), t = parseNum(formData.tax);
+                return formMode === '買入' ? (q * p + f + t) : (q * p - f - t);
+            }, [formData, formMode]);
+
+            // --- [修復重點：智慧現金加總邏輯] ---
+            const cashVal = useMemo(() => {
+                const balances = data.accountBalances || {};
+                const settings = data.settings || [];
+                
+                if (currentAccount === '全部帳戶') {
+                    // 智慧加總：銀行餘額 + 無連動券商餘額 (避免雙重扣款)
+                    return settings.reduce((sum, s) => {
+                        const bal = parseNum(balances[s.AccountName]);
+                        if (s.Category === '銀行') return sum + bal;
+                        // 若券商沒連動銀行，代表它自己扣款，必須算入現金流
+                        if (s.Category === '券商' && (!s.LinkedBank || s.LinkedBank === "")) return sum + bal;
+                        return sum;
+                    }, 0);
+                }
+                const activeS = settings.find(x => x.AccountName === currentAccount);
+                if (activeS?.Category === '券商' && activeS.LinkedBank) return parseNum(balances[activeS.LinkedBank]);
+                return parseNum(balances[currentAccount]);
+            }, [data.accountBalances, data.settings, currentAccount]);
+
+            const netWorth = cashVal + stats.marketValue;
+            const cashRatio = netWorth > 0 ? (cashVal / netWorth) * 100 : 0;
+
             useEffect(() => {
                 if (!chartReady) return;
-                renderCharts();
+                const render = () => {
+                    const aCtx = document.getElementById('allocation-canvas')?.getContext('2d');
+                    if (aCtx) {
+                        chartRefs.current.allocation?.destroy();
+                        const live = stats.list.filter(h => h.qty > 0);
+                        chartRefs.current.allocation = new Chart(aCtx, { type: 'doughnut', data: { labels: ['現金', ...live.map(h => h.symbol)], datasets: [{ data: [cashVal, ...live.map(h => h.marketVal)], backgroundColor: ['#FFD700', '#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 4, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } } });
+                    }
+                    if (activeTab === 'analysis') {
+                        const tCtx = document.getElementById('trend-canvas')?.getContext('2d');
+                        if (tCtx) {
+                            chartRefs.current.trend?.destroy();
+                            const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => new Date(a[0]) - new Date(b[0]));
+                            let cum = 0; const labels = [], vals = [];
+                            txs.forEach(t => { const impact = t[1].match(/存|買|除/) ? (parseNum(t[3])*parseNum(t[4])) : -(parseNum(t[3])*parseNum(t[4])); cum += impact; labels.push(t[0].split(' ')[0]); vals.push(cum); });
+                            chartRefs.current.trend = new Chart(tCtx, { type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
+                        }
+                        const sCtx = document.getElementById('stock-pie-canvas')?.getContext('2d');
+                        if (sCtx) {
+                            chartRefs.current.stock?.destroy();
+                            const vInv = (data.inventory || []).filter(i => parseNum(i.現值) > 0);
+                            chartRefs.current.stock = new Chart(sCtx, { type: 'pie', data: { labels: vInv.map(i => i.代號), datasets: [{ data: vInv.map(i => parseNum(i.現值)), backgroundColor: ['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+                        }
+                        const bCtx = document.getElementById('bank-pie-canvas')?.getContext('2d');
+                        if (bCtx) {
+                            chartRefs.current.bank?.destroy();
+                            const bData = data.settings.filter(s => s.Category === '銀行');
+                            chartRefs.current.bank = new Chart(bCtx, { type: 'doughnut', data: { labels: bData.map(s => s.AccountName), datasets: [{ data: bData.map(s => parseNum(data.accountBalances[s.AccountName])), backgroundColor: ['#5856d6', '#64d2ff', '#34c759', '#ff9500'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
+                        }
+                    }
+                };
+                render();
                 return () => Object.values(chartRefs.current).forEach(c => c?.destroy());
-            }, [data, currentAccount, activeTab, chartReady]);
-
-            const renderCharts = () => {
-                const aCtx = document.getElementById('allocation-canvas')?.getContext('2d');
-                if (aCtx) {
-                    chartRefs.current.allocation?.destroy();
-                    const s = (data.settings || []).find(x => x.AccountName === currentAccount);
-                    const cash = currentAccount === '全部帳戶' ? parseNum(data.summary.BankBalance) : (s?.Category === '券商' && s.LinkedBank ? (data.accountBalances[s.LinkedBank] || 0) : (data.accountBalances[currentAccount] || 0));
-                    const live = stats.list.filter(h => h.qty > 0);
-                    chartRefs.current.allocation = new Chart(aCtx, {
-                        type: 'doughnut',
-                        data: { labels: ['現金', ...live.map(h => h.symbol)], datasets: [{ data: [cash, ...live.map(h => h.marketVal)], backgroundColor: ['#FFD700', '#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 4, borderColor: '#ffffff', hoverOffset: 12 }] },
-                        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } }
-                    });
-                }
-                if (activeTab === 'analysis') {
-                    const tCtx = document.getElementById('trend-canvas')?.getContext('2d');
-                    if (tCtx) {
-                        chartRefs.current.trend?.destroy();
-                        const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => new Date(a[0]) - new Date(b[0]));
-                        let cum = 0; const labels = [], vals = [];
-                        txs.forEach(t => { const impact = t[1].match(/存|買|除/) ? (parseNum(t[3])*parseNum(t[4])) : -(parseNum(t[3])*parseNum(t[4])); cum += impact; labels.push(t[0].split(' ')[0]); vals.push(cum); });
-                        chartRefs.current.trend = new Chart(tCtx, { type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
-                    }
-                    const sCtx = document.getElementById('stock-pie-canvas')?.getContext('2d');
-                    if (sCtx) {
-                        chartRefs.current.stock?.destroy();
-                        const vInv = (data.inventory || []).filter(i => parseNum(i.現值) > 0);
-                        chartRefs.current.stock = new Chart(sCtx, { type: 'pie', data: { labels: vInv.map(i => i.代號), datasets: [{ data: vInv.map(i => parseNum(i.現值)), backgroundColor: ['#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-                    }
-                    const bCtx = document.getElementById('bank-pie-canvas')?.getContext('2d');
-                    if (bCtx) {
-                        chartRefs.current.bank?.destroy();
-                        const bankData = (data.settings || []).filter(s => s.Category === '銀行');
-                        chartRefs.current.bank = new Chart(bCtx, { type: 'doughnut', data: { labels: bankData.map(s => s.AccountName), datasets: [{ data: bankData.map(s => parseNum(data.accountBalances[s.AccountName])), backgroundColor: ['#5856d6', '#64d2ff', '#34c759', '#ff9500'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
-                    }
-                }
-            };
+            }, [data, currentAccount, activeTab, chartReady, stats, cashVal]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (currentAccount === '全部帳戶') return showToast("請先選擇帳戶");
+                if (currentAccount === '全部帳戶') return showToast("請選擇帳戶");
                 setLoading(true); setSubmitStatus('同步中...');
                 try {
                     let finalType = formMode;
@@ -226,59 +237,41 @@
                         if (formMode === '買入' || formMode === '存入') finalType = '存入';
                         else if (formMode === '賣出' || formMode === '提領') finalType = '提領';
                     }
-                    const body = { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: finalType, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
-                    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
-                    const resJson = await res.json();
-                    if (resJson.status === "success") { setSubmitStatus('儲存成功'); showToast("同步完成"); setTimeout(() => { setIsModalOpen(false); fetchData(); }, 800); }
+                    if (formMode === '除權息') {
+                        const s = (data.settings || []).find(x => x.AccountName === currentAccount);
+                        const targetBank = s?.LinkedBank || currentAccount;
+                        if (parseNum(formData.dividendCash) > 0) {
+                            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'insert', type: '除權息', account: targetBank, symbol: `股息:${formData.symbol}`, quantity: 1, price: formData.dividendCash, fee: 0, tax: 0, date: formData.date, memo: formData.memo }) });
+                        }
+                        if (parseNum(formData.dividendStock) > 0) {
+                            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'insert', type: '除權息', account: currentAccount, symbol: formData.symbol, quantity: formData.dividendStock, price: 0, fee: 0, tax: 0, date: formData.date, memo: formData.memo }) });
+                        }
+                    } else {
+                        const body = (formMode === '轉帳') 
+                            ? { action: isEditMode ? 'updateTransaction' : 'transfer', index: editingIndex, fromAccount: currentAccount, toAccount: formData.toAccount, amount: formData.price, date: formData.date, memo: formData.memo }
+                            : { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: finalType, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
+                        await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+                    }
+                    setSubmitStatus('儲存成功'); setTimeout(() => { setIsModalOpen(false); fetchData(); }, 800);
                 } catch (e) { showToast("連線失敗"); } finally { setLoading(false); setSubmitStatus('確認並同步'); }
-            };
-
-            const deleteTransaction = (idx) => {
-                setConfirmConfig({ title: '刪除此交易？', msg: '永久從雲端移除？連動交割需手動刪除。', action: async () => {
-                    setIsConfirmOpen(false); setLoading(true);
-                    try {
-                        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteTransaction', index: idx }) });
-                        if ((await res.json()).status === "success") { showToast("已刪除"); fetchData(); }
-                    } catch (e) { showToast("刪除失敗"); } finally { setLoading(false); }
-                }});
-                setIsConfirmOpen(true);
             };
 
             const editTransaction = (idx) => {
                 const t = data.transactions[idx]; setEditingIndex(idx); setIsEditMode(true);
                 let d = t[0].replace(/\s*[上下]午\s*/, ' ').replace(/\//g, '-');
                 try { d = new Date(d).toISOString().split('T')[0]; } catch(e) { d = new Date().toISOString().split('T')[0]; }
-                setFormData({ symbol: t[2], quantity: parseNum(t[3]), price: parseNum(t[4]), fee: parseNum(t[5]), tax: parseNum(t[7]), memo: t[8]||"", date: d });
+                setFormData({ symbol: t[2], quantity: parseNum(t[3]), price: parseNum(t[4]), fee: parseNum(t[5]), tax: parseNum(t[7]), memo: t[8]||"", date: d, dividendCash: '', dividendStock: '' });
                 setFormMode(t[1]); setIsModalOpen(true);
             };
 
-            const handleUpdateSetting = (index, field, value) => {
-                const newSets = [...data.settings]; newSets[index][field] = value;
-                setData({ ...data, settings: newSets });
-            };
-
-            const saveAllSettings = async () => {
-                setLoading(true);
-                try {
-                    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateSettings", settings: data.settings }) });
-                    if ((await res.json()).status === "success") { showToast("帳戶設定同步完成"); fetchData(true); }
-                } catch (e) { showToast("儲存失敗"); } finally { setLoading(false); }
-            };
-
-            // 運算核心
-            const activeSetting = (data.settings || []).find(x => x.AccountName === currentAccount);
-            const cashVal = currentAccount === '全部帳戶' ? parseNum(data.summary.BankBalance) : (activeSetting?.Category === '券商' && activeSetting.LinkedBank ? (data.accountBalances[activeSetting.LinkedBank] || 0) : (data.accountBalances[currentAccount] || 0));
-            const netWorth = cashVal + stats.marketValue;
-            const cashRatio = netWorth > 0 ? (cashVal / netWorth) * 100 : 0;
-
             return (
                 <div className="min-h-screen bg-[#f2f2f7] font-sans text-slate-800 antialiased overflow-x-hidden">
-                    <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+                    <style>{`.no-scrollbar::-webkit-scrollbar { display: none !important; } .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }`}</style>
                     
                     {loading && (
                         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/80 backdrop-blur-md">
                             <div className="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
-                            <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Processing Data...</p>
+                            <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Processing...</p>
                         </div>
                     )}
 
@@ -286,12 +279,12 @@
                         <div className="flex justify-between items-center mb-5">
                             <button onClick={() => fetchData(true)} className="p-2 bg-white/15 rounded-2xl active:scale-90 transition-transform"><Icons.RefreshCw className="text-white" /></button>
                             <div className="text-center text-white"><p className="text-[10px] font-black opacity-30 uppercase tracking-widest">Wealth Growth Pro</p><p className="text-3xl font-black tabular-nums">${Math.round(netWorth).toLocaleString()}</p></div>
-                            <button onClick={() => { if(currentAccount==='全部帳戶')return showToast("請選擇帳戶"); setIsEditMode(false); setFormMode(currentCategory==='券商'?'買入':'存入'); setFormData({ symbol: '', quantity: '', price: '', fee: 0, tax: 0, memo: '', date: new Date().toISOString().split('T')[0] }); setIsModalOpen(true); }} className="p-2 bg-white rounded-2xl text-blue-600 shadow-xl active:scale-90"><Icons.Plus /></button>
+                            <button onClick={() => { if(currentAccount==='全部帳戶')return showToast("請選擇帳戶"); setIsEditMode(false); setFormMode(currentCategory==='券商'?'買入':'存入'); setFormData({ symbol: '', quantity: '', price: '', fee: 0, tax: 0, memo: '', dividendCash: '', dividendStock: '', date: new Date().toISOString().split('T')[0] }); setIsModalOpen(true); }} className="p-2 bg-white rounded-2xl text-blue-600 shadow-xl active:scale-90"><Icons.Plus /></button>
                         </div>
                         <div className="px-8 mb-6">
                             <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
-                                <div className="h-full transition-all duration-1000" style={{ width: `${cashRatio}%`, backgroundColor: '#FFD700' }}></div>
-                                <div className="h-full bg-white/30" style={{ width: `${100-cashRatio}%` }}></div>
+                                <div className="h-full transition-all duration-1000" style={{ width: `${cashRatio}%`, backgroundColor: '#FFD700' }} />
+                                <div className="h-full bg-white/30" style={{ width: `${100-cashRatio}%` }} />
                             </div>
                             <div className="flex justify-between text-[8px] font-black text-white/40 uppercase mt-1.5 px-1"><span>現金 {Math.round(cashRatio)}%</span><span>持股 {Math.round(100-cashRatio)}%</span></div>
                         </div>
@@ -306,7 +299,7 @@
                     <main className="max-w-md mx-auto pt-64 px-5 space-y-7 pb-40">
                         {['portfolio', 'transactions'].includes(activeTab) && (
                             <>
-                                <section className="glass-card p-7 grid grid-cols-2 gap-4 shadow-sm">
+                                <section className="glass-card p-7 grid grid-cols-2 gap-4">
                                     <div className="space-y-4">
                                         <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">庫存市值</p><p className="text-xl font-black text-slate-800">${Math.round(stats.marketValue).toLocaleString()}</p></div>
                                         <div><p className="text-[9px] text-blue-400 font-black uppercase mb-1">未實現損益</p><p className={`text-xl font-black ${stats.totalProfit>=0?'text-red-500':'text-green-600'}`}>{stats.totalProfit>=0?'+':''}{Math.round(stats.totalProfit).toLocaleString()}</p></div>
@@ -318,10 +311,7 @@
                                 </section>
 
                                 <section className="bg-slate-900 rounded-[40px] p-9 text-white shadow-2xl relative overflow-hidden">
-                                    <div className="relative z-10">
-                                        <p className="text-xs font-bold text-white/40 mb-1 uppercase tracking-widest">{currentAccount==='全部帳戶'?'總可用現金':`${currentAccount} 餘額`}</p>
-                                        <p className="text-4xl font-black tracking-tighter tabular-nums">${Math.round(cashVal).toLocaleString()}</p>
-                                    </div>
+                                    <div className="relative z-10"><p className="text-xs font-bold text-white/40 mb-1 uppercase tracking-widest">{currentAccount==='全部帳戶'?'總可用現金':`${currentAccount} 餘額`}</p><p className="text-4xl font-black tracking-tighter tabular-nums">${Math.round(cashVal).toLocaleString()}</p></div>
                                     <Icons.Landmark className="text-white/5 absolute -right-4 -bottom-4 rotate-12" />
                                 </section>
 
@@ -333,21 +323,18 @@
                                 {activeTab === 'portfolio' ? (
                                     <div className="space-y-6">
                                         <div className="glass-card p-6 flex flex-col items-center"><div className="w-full h-48 relative"><canvas id="allocation-canvas" /></div></div>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center px-2"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">標的分佈明細</h3><div className="h-px flex-1 bg-slate-200/50 mx-4"></div></div>
-                                            {stats.list.filter(h=>h.qty>0).map((h, i) => (
-                                                <div key={i} className="glass-card p-6 space-y-4 transition-transform active:scale-[0.98]">
-                                                    <div className="flex justify-between items-start">
-                                                        <div><div className="flex items-center gap-2 mb-1"><span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">{h.symbol}</span><span className="text-slate-400 text-[10px] font-bold">{h.qty.toLocaleString()} 股</span></div><p className="text-2xl font-black text-slate-800 tracking-tighter">${h.price.toLocaleString()}</p></div>
-                                                        <div className="text-right"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">累積損益</p><p className={`text-lg font-black ${h.profit>=0?'text-red-500':'text-green-600'}`}>{h.profit>=0?'+':''}{Math.round(h.profit).toLocaleString()}</p></div>
-                                                    </div>
+                                        {stats.list.filter(h=>h.qty>0).map((h, i) => (
+                                            <div key={i} className="glass-card p-6 space-y-4 transition-transform active:scale-[0.98]">
+                                                <div className="flex justify-between items-start">
+                                                    <div><div className="flex items-center gap-2 mb-1"><span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">{h.symbol}</span><span className="text-slate-400 text-[10px] font-bold">{h.qty.toLocaleString()} 股</span></div><p className="text-2xl font-black text-slate-800 tracking-tighter">${h.price.toLocaleString()}</p></div>
+                                                    <div className="text-right"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">累積損益</p><p className={`text-lg font-black ${h.profit>=0?'text-red-500':'text-green-600'}`}>{h.profit>=0?'+':''}{Math.round(h.profit).toLocaleString()}</p></div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        <div className="px-2 relative group"><input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="搜尋歷史紀錄..." className="w-full bg-white border border-slate-200 p-4 pl-12 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" /><div className="absolute left-4 top-4 text-slate-300"><Icons.Search /></div></div>
+                                        <div className="px-2 relative group"><input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="搜尋歷史紀錄..." className="w-full bg-white border border-slate-200 p-4 pl-12 rounded-2xl text-sm font-bold outline-none" /><div className="absolute left-4 top-4 text-slate-300"><Icons.Search /></div></div>
                                         {data.transactions?.map((t, idx)=>({t,idx})).filter(item => {
                                             const matchAcc = currentAccount==='全部帳戶'||item.t[6]===currentAccount;
                                             if(currentCategory==='銀行'&&matchAcc && !['存入','提領','轉帳','除權息'].includes(item.t[1]) && !item.t[2].includes('交割:')) return false;
@@ -358,15 +345,13 @@
                                                 <div key={i} className="glass-card p-5 flex justify-between items-center group relative fade-in">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${isOut?'bg-red-50 text-red-500':'bg-blue-50 text-blue-500'}`}>{isOut ? <Icons.TrendingDown /> : <Icons.TrendingUp />}</div>
-                                                        <div><p className="text-[9px] font-black text-slate-400 uppercase">{item.t[0].split(' ')[0]} • {item.t[6]}</p><p className="font-black text-slate-700 text-sm">{item.t[2]}</p>{item.t[8] && <p className="text-[9px] text-blue-500 font-bold mt-1 bg-blue-50 px-1.5 py-0.5 rounded">📝 {item.t[8]}</p>}</div>
+                                                        <div><p className="text-[9px] font-black text-slate-400 uppercase">{item.t[0].split(' ')[0]} • {item.t[6]}</p><p className="font-black text-slate-700 text-sm">{item.t[2]}</p></div>
                                                     </div>
                                                     <div className="text-right pr-10">
                                                         <p className={`font-black tabular-nums ${isOut?'text-red-500':'text-slate-800'}`}>{isOut?'-':'+'}{parseNum(item.t[4]).toLocaleString()}</p>
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase">{item.t[1]}</p>
                                                     </div>
                                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center active:scale-90"><Icons.Edit /></button>
-                                                        <button onClick={()=>deleteTransaction(item.idx)} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90"><Icons.Trash /></button>
+                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center"><Icons.Edit /></button>
                                                     </div>
                                                 </div>
                                             );
@@ -381,72 +366,36 @@
                                 <h2 className="text-3xl font-black text-slate-800 px-2 tracking-tight">資產深度分析</h2>
                                 <section className="space-y-4"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px] px-2">財富成長趨勢</h3><div className="glass-card p-6 h-64"><canvas id="trend-canvas" /></div></section>
                                 
-                                {/* 損益排行 */}
                                 <section className="space-y-4">
                                     <div className="flex justify-between items-center px-2">
                                         <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股損益排行 (全域)</h3>
                                         <div className="flex gap-2">
-                                            <button onClick={() => setRankingSortBy(prev => prev === 'profit' ? 'roi' : 'profit')} className={`text-[9px] font-black px-3 py-1.5 rounded-lg active:scale-95 transition-colors ${rankingSortBy === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>
-                                                {rankingSortBy === 'profit' ? '按金額' : '按報酬率'}
-                                            </button>
-                                            <button onClick={() => setRankingSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95 transition-all">
-                                                {rankingSortOrder === 'desc' ? '↓ 最大值' : '↑ 最小值'}
-                                            </button>
+                                            <button onClick={() => setRankSort({ ...rankSort, by: rankSort.by === 'profit' ? 'roi' : 'profit'})} className={`text-[9px] font-black px-3 py-1.5 rounded-lg ${rankSort.by === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>按{rankSort.by === 'profit' ? '金額' : '報酬率'}</button>
+                                            <button onClick={() => setRankSort({ ...rankSort, order: rankSort.order === 'desc' ? 'asc' : 'desc'})} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{rankSort.order === 'desc' ? '↓ 最大' : '↑ 最小'}</button>
                                         </div>
                                     </div>
                                     <div className="glass-card p-7 space-y-6">
-                                        {globalStats.list.filter(s=>s.profit!==0).sort((a, b) => {
-                                            let valA = rankingSortBy === 'profit' ? a.profit : a.roi;
-                                            let valB = rankingSortBy === 'profit' ? b.profit : b.roi;
-                                            return rankingSortOrder === 'desc' ? valB - valA : valA - valB;
-                                        }).map((s,i)=>(
+                                        {globalStats.list.filter(s=>s.profit!==0).sort((a, b) => { let vA = rankSort.by === 'profit' ? a.profit : a.roi; let vB = rankSort.by === 'profit' ? b.profit : b.roi; return rankSort.order === 'desc' ? vB - vA : vA - vB; }).map((s,i)=>(
                                             <div key={i} className="space-y-2">
                                                 <div className="flex justify-between text-[11px] font-black items-end"><span className="text-slate-500 uppercase">{s.symbol}</span><div className="text-right"><span className={s.profit>=0?'text-red-500':'text-green-600'}>{Math.round(s.profit).toLocaleString()}</span><span className="text-slate-400 ml-1 text-[9px]">({s.roi.toFixed(1)}%)</span></div></div>
-                                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankingSortBy === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankingSortBy === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div></div>
+                                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankSort.by === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankSort.by === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div></div>
                                             </div>
                                         ))}
                                     </div>
                                 </section>
 
-                                {/* 持股占比 - 新增排序按鈕 */}
                                 <section className="space-y-4">
-                                    <div className="flex justify-between items-center px-2">
-                                        <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3>
-                                        <button onClick={() => setStockPropSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95 transition-all">
-                                            {stockPropSortOrder === 'desc' ? '↓ 大至小' : '↑ 小至大'}
-                                        </button>
-                                    </div>
+                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3><button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
                                     <div className="glass-card p-8 flex flex-col items-center">
                                         <div className="w-full h-40 relative"><canvas id="stock-pie-canvas" /></div>
-                                        <div className="w-full mt-8 space-y-3">
-                                            {globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockPropSortOrder === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(
-                                                <div key={i} className="flex justify-between text-[11px] font-black text-slate-600 transition-all"><span>{h.symbol}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>
-                                            ))}
-                                        </div>
+                                        <div className="w-full mt-8 space-y-3">{globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockSort === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(<div key={i} className="flex justify-between text-[11px] font-black text-slate-600"><span>{h.symbol}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>))}</div>
                                     </div>
                                 </section>
-
-                                {/* 銀行占比 - 新增排序按鈕 */}
                                 <section className="space-y-4">
-                                    <div className="flex justify-between items-center px-2">
-                                        <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">銀行資金占比</h3>
-                                        <button onClick={() => setBankPropSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95 transition-all">
-                                            {bankPropSortOrder === 'desc' ? '↓ 大至小' : '↑ 小至大'}
-                                        </button>
-                                    </div>
+                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">銀行資金占比</h3><button onClick={() => setBankSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{bankSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
                                     <div className="glass-card p-8 flex flex-col items-center">
                                         <div className="w-full h-40 relative"><canvas id="bank-pie-canvas" /></div>
-                                        <div className="w-full mt-8 space-y-3">
-                                            {data.settings.filter(s=>s.Category==='銀行').sort((a,b) => {
-                                                const balA = parseNum(data.accountBalances[a.AccountName]);
-                                                const balB = parseNum(data.accountBalances[b.AccountName]);
-                                                return bankPropSortOrder === 'desc' ? balB - balA : balA - balB;
-                                            }).map((acc, i) => { 
-                                                const bal = parseNum(data.accountBalances[acc.AccountName]); 
-                                                const totalB = Object.values(data.accountBalances).reduce((a,b)=>a+b, 0) || 1; 
-                                                return (<div key={i} className="flex justify-between text-[11px] font-black text-slate-600"><span>{acc.AccountName}</span><span className="text-slate-800">${Math.round(bal).toLocaleString()} ({Math.round(bal/totalB*100)}%)</span></div>); 
-                                            })}
-                                        </div>
+                                        <div className="w-full mt-8 space-y-3">{data.settings.filter(s=>s.Category==='銀行').sort((a,b) => { const balA = parseNum(data.accountBalances[a.AccountName]), balB = parseNum(data.accountBalances[b.AccountName]); return bankSort === 'desc' ? balB - balA : balA - balB; }).map((acc, i) => { const bal = parseNum(data.accountBalances[acc.AccountName]), totalB = Object.values(data.accountBalances).reduce((a,b)=>a+b, 0) || 1; return (<div key={i} className="flex justify-between text-[11px] font-black text-slate-600"><span>{acc.AccountName}</span><span className="text-slate-800">${Math.round(bal).toLocaleString()} ({Math.round(bal/totalB*100)}%)</span></div>); })}</div>
                                     </div>
                                 </section>
                             </div>
@@ -481,7 +430,7 @@
                                         </div>
                                     ))}
                                 </section>
-                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存設定到雲端</button></div>
+                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存並同步到雲端</button></div>
                             </div>
                         )}
                     </main>
@@ -502,11 +451,46 @@
                                     <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px]">
                                         <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>
                                         <button onClick={()=>setFormMode(currentCategory==='券商'?'賣出':'提領')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['賣出','提領'].includes(formMode)?'bg-white shadow-sm text-red-500':'text-slate-400'}`}>{currentCategory==='券商'?'賣出':'提領'}</button>
+                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'除權息':'轉帳')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['除權息','轉帳'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'除權息':'轉帳'}</button>
                                     </div>
                                     <div className="space-y-5">
-                                        <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
-                                        <div className="grid grid-cols-2 gap-4"><input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" /><input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="單價/總額" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" /></div>
-                                        <input type="text" value={formData.memo} onChange={e=>setFormData({...formData,memo:e.target.value})} placeholder="備註 (選填)" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" /><input type="date" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" />
+                                        {formMode === '轉帳' ? (
+                                            <>
+                                                <select value={formData.toAccount} onChange={e=>setFormData({...formData,toAccount:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black border-2 border-transparent focus:border-blue-500 outline-none"><option value="">選擇目標銀行</option>{data.settings.filter(acc => acc.Category === '銀行' && acc.AccountName !== currentAccount).map((acc, i) => (<option key={i} value={acc.AccountName}>{acc.AccountName}</option>))}</select>
+                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="輸入金額" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-blue-500 outline-none" />
+                                            </>
+                                        ) : formMode === '除權息' ? (
+                                            <>
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-blue-600">除息金額 ($)</label><input type="number" value={formData.dividendCash} onChange={e=>setFormData({...formData,dividendCash:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (股)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                </div>
+                                                <div className="bg-blue-50/50 p-4 rounded-2xl flex items-start gap-3 border border-blue-100"><div className="bg-blue-600 p-1 rounded text-white"><Icons.ArrowRight className="w-3 h-3" /></div><p className="text-[10px] font-bold text-blue-800 leading-tight">現金將入銀行，股數將入券商庫存。</p></div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                    <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="單價/總額" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                </div>
+                                                {currentCategory === '券商' && (
+                                                    <>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">手續費</label><input type="number" value={formData.fee} onChange={e=>setFormData({...formData,fee:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">交易稅</label><input type="number" value={formData.tax} onChange={e=>setFormData({...formData,tax:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                        </div>
+                                                        <div className="bg-blue-50 p-6 rounded-[32px] text-center border border-blue-100">
+                                                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">預估交割金額</p>
+                                                            <p className="text-3xl font-black text-blue-600 tracking-tighter">${Math.round(settlementDisplay).toLocaleString()}</p>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                        <input type="text" value={formData.memo} onChange={e=>setFormData({...formData,memo:e.target.value})} placeholder="備註 (選填)" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
+                                        <input type="date" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" />
                                     </div>
                                     <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">{loading ? "同步中..." : submitStatus}</button>
                                 </div>
@@ -516,10 +500,10 @@
 
                     {isConfirmOpen && (
                         <div className="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-8">
-                            <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 className="text-xl font-black text-slate-800 mb-2">{confirmConfig.title}</h3><p className="text-sm text-slate-500 font-bold mb-8 leading-relaxed">{confirmConfig.msg}</p><div className="flex gap-3"><button onClick={()=>setIsConfirmOpen(false)} className="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button onClick={confirmConfig.action} className="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white shadow-lg active:scale-95 transition-all">確認</button></div></div>
+                            <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl modal-animate"><h3 className="text-xl font-black text-slate-800 mb-2">{confirmConfig.title}</h3><p className="text-sm text-slate-500 font-bold mb-8 leading-relaxed">{confirmConfig.msg}</p><div className="flex gap-3"><button onClick={()=>setIsConfirmOpen(false)} className="flex-1 py-4 rounded-2xl font-black bg-slate-100 text-slate-500 active:scale-95 transition-all">取消</button><button onClick={confirmConfig.action} className="flex-1 py-4 rounded-2xl font-black bg-red-500 text-white active:scale-95 shadow-lg">確認</button></div></div>
                         </div>
                     )}
-                    <div className={`fixed top-10 left-1/2 -translate-x-1/2 z-[300] bg-slate-800 text-white px-8 py-4 rounded-full text-sm font-bold shadow-2xl transition-all duration-300 ${toast.show?'opacity-100 scale-100':'opacity-0 scale-90 pointer-events-none'}`}>{toast.msg}</div>
+                    <div id="toast" className={`fixed top-10 left-1/2 -translate-x-1/2 z-[300] bg-slate-800 text-white px-8 py-4 rounded-full text-sm font-bold shadow-2xl transition-all duration-300 ${toast.show?'opacity-100 scale-100':'opacity-0 scale-90 pointer-events-none'}`}>{toast.msg}</div>
                 </div>
             );
         };

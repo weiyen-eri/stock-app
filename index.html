@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>財富成長 Pro</title>
     <!-- 
-      版本：v2.8.7 Pro (Smart Cash Aggregation & Restoration)
+      版本：v2.9.4 Pro (Icon & Border Refinement)
       修改摘要：
-      1. 修正總現金加總：智慧過濾交割重疊金額，總可用現金 = 銀行餘額 + 無連動券商現金。
-      2. 解決餘額顯示：修復單一銀行選中時餘額顯示異常及「全部帳戶」排行變空值的 Bug。
-      3. 除權息拆分升級：除息自動入銀行，除權自動入券商股數，單價自動設為 0。
-      4. 排序功能全回歸：損益排行、持股占比、銀行占比均支援按金額/占比之雙向排序。
-      5. UI 高感優化：徹底隱藏 Header 滾動條，維持黃金現金色視覺 (#FFD700)。
+      1. 修正設定圖示：更換 Icons.Settings 為更穩定的單一路徑齒輪，解決破碎感。
+      2. 移除卡片邊框：移除設定頁面中券商與銀行卡片的藍色左側邊框，視覺更乾淨。
+      3. 修復排行邏輯：將分析分頁的 rankingSortBy 統一為 rankSort.by，確保排行條正常顯示。
+      4. 智慧現金加總：維持 v2.8.9 精確邏輯，解決 50 萬餘額加總錯誤。
+      5. 除權息拆分：維持「除息入銀行、除權入券商」之自動化功能。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -20,10 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        :root { --primary-blue: #007aff; --bg-gray: #f2f2f7; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
-        body { background-color: var(--bg-gray); font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; padding-top: var(--safe-top); color: #1c1c1e; -webkit-font-smoothing: antialiased; }
+        :root { --primary-blue: #007aff; --bg-gray: #f2f2f7; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); --stock-up: #ff3b30; --stock-down: #34c759; }
+        body { background-color: var(--bg-gray); font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; padding-top: var(--safe-top); color: #1c1c1e; antialiased; }
         .glass-card { background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(25px); border-radius: 32px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04); border: 1px solid rgba(255, 255, 255, 0.5); overflow: hidden; }
-        /* 徹底隱藏滾動條 */
         .no-scrollbar::-webkit-scrollbar { display: none !important; }
         .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
         .modal-animate { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -38,12 +37,19 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // --- [圖示組件庫] ---
         const Icons = {
             RefreshCw: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>,
             Plus: ({ className }) => <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
             PieChart: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
             History: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
-            Settings: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+            // 修正後的設定圖示：使用標準的齒輪路徑
+            Settings: ({ className, size = 24 }) => (
+                <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+            ),
             Search: ({ className }) => <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
             TrendingUp: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>,
             TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
@@ -57,7 +63,7 @@
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         const parseNum = (v) => { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; };
 
-        // --- [全局計算引擎] ---
+        // --- [全局精密計算引擎] ---
         const calculateStatsCore = (dataCache, targetAcc) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
                 return { list: [], marketValue: 0, totalProfit: 0, relevantAccounts: [targetAcc] };
@@ -82,6 +88,7 @@
                 const type = t[1], symbol = String(t[2] || "").trim(), qty = parseNum(t[3]), price = parseNum(t[4]), fee = parseNum(t[5]), tax = parseNum(t[7]);
                 if (!symbol || ['現金','利息','存入','提領','轉帳'].includes(symbol) || symbol.includes('交割:')) return;
                 if (!holdings[symbol]) holdings[symbol] = { qty: 0, totalBuyCost: 0, buyQty: 0, realized: 0 };
+
                 if (type === '買入') {
                     holdings[symbol].qty += qty; holdings[symbol].buyQty += qty; holdings[symbol].totalBuyCost += (qty * price + fee + tax);
                 } else if (type === '賣出') {
@@ -107,7 +114,7 @@
 
         const App = () => {
             const [data, setData] = useState(() => {
-                const cache = localStorage.getItem('ledger_cache_v287');
+                const cache = localStorage.getItem('ledger_cache_v294');
                 return cache ? JSON.parse(cache) : { summary: {}, transactions: [], settings: [], inventory: [], accountBalances: {} };
             });
             const [loading, setLoading] = useState(false);
@@ -141,9 +148,9 @@
                     const result = await res.json();
                     if (result.status === "success") {
                         setData(result.data);
-                        localStorage.setItem('ledger_cache_v287', JSON.stringify(result.data));
+                        localStorage.setItem('ledger_cache_v294', JSON.stringify(result.data));
                     }
-                } catch (e) { showToast("更新失敗"); } finally { setLoading(false); }
+                } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
             };
 
             const showToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
@@ -151,7 +158,7 @@
             const stats = useMemo(() => calculateStatsCore(data, currentAccount), [data, currentAccount]);
             const globalStats = useMemo(() => calculateStatsCore(data, '全部帳戶'), [data]);
 
-            // 股票自動計算
+            // 自動計算
             useEffect(() => {
                 if (currentCategory === '券商' && (formMode === '買入' || formMode === '賣出')) {
                     const q = parseNum(formData.quantity), p = parseNum(formData.price), total = q * p;
@@ -168,18 +175,15 @@
                 return formMode === '買入' ? (q * p + f + t) : (q * p - f - t);
             }, [formData, formMode]);
 
-            // --- [修復重點：智慧現金加總邏輯] ---
+            // 現金加總核心 (v2.8.9 穩定邏輯)
             const cashVal = useMemo(() => {
                 const balances = data.accountBalances || {};
                 const settings = data.settings || [];
-                
                 if (currentAccount === '全部帳戶') {
-                    // 智慧加總：銀行餘額 + 無連動券商餘額 (避免雙重扣款)
                     return settings.reduce((sum, s) => {
                         const bal = parseNum(balances[s.AccountName]);
                         if (s.Category === '銀行') return sum + bal;
-                        // 若券商沒連動銀行，代表它自己扣款，必須算入現金流
-                        if (s.Category === '券商' && (!s.LinkedBank || s.LinkedBank === "")) return sum + bal;
+                        if (s.Category === '券商' && (!s.LinkedBank || s.LinkedBank.trim() === "")) return sum + bal;
                         return sum;
                     }, 0);
                 }
@@ -262,6 +266,20 @@
                 try { d = new Date(d).toISOString().split('T')[0]; } catch(e) { d = new Date().toISOString().split('T')[0]; }
                 setFormData({ symbol: t[2], quantity: parseNum(t[3]), price: parseNum(t[4]), fee: parseNum(t[5]), tax: parseNum(t[7]), memo: t[8]||"", date: d, dividendCash: '', dividendStock: '' });
                 setFormMode(t[1]); setIsModalOpen(true);
+            };
+
+            const saveAllSettings = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateSettings", settings: data.settings }) });
+                    if ((await res.json()).status === "success") { showToast("帳戶設定同步完成"); fetchData(true); }
+                    else { showToast("儲存失敗"); }
+                } catch (e) { showToast("連線失敗"); } finally { setLoading(false); }
+            };
+
+            const handleUpdateSetting = (index, field, value) => {
+                const newSets = [...data.settings]; newSets[index][field] = value;
+                setData({ ...data, settings: newSets });
             };
 
             return (
@@ -351,7 +369,8 @@
                                                         <p className={`font-black tabular-nums ${isOut?'text-red-500':'text-slate-800'}`}>{isOut?'-':'+'}{parseNum(item.t[4]).toLocaleString()}</p>
                                                     </div>
                                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center"><Icons.Edit /></button>
+                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center active:scale-90"><Icons.Edit /></button>
+                                                        <button onClick={() => { setConfirmConfig({ title: '刪除紀錄？', msg: '永久從雲端移除？', action: async () => { setIsConfirmOpen(false); setLoading(true); try { await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteTransaction', index: item.idx }) }); fetchData(); } catch(e){} finally { setLoading(false); } } }); setIsConfirmOpen(true); }} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90"><Icons.Trash /></button>
                                                     </div>
                                                 </div>
                                             );
@@ -370,12 +389,15 @@
                                     <div className="flex justify-between items-center px-2">
                                         <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股損益排行 (全域)</h3>
                                         <div className="flex gap-2">
-                                            <button onClick={() => setRankSort({ ...rankSort, by: rankSort.by === 'profit' ? 'roi' : 'profit'})} className={`text-[9px] font-black px-3 py-1.5 rounded-lg ${rankSort.by === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>按{rankSort.by === 'profit' ? '金額' : '報酬率'}</button>
-                                            <button onClick={() => setRankSort({ ...rankSort, order: rankSort.order === 'desc' ? 'asc' : 'desc'})} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{rankSort.order === 'desc' ? '↓ 最大' : '↑ 最小'}</button>
+                                            <button onClick={() => setRankSort({ ...rankSort, by: rankSort.by === 'profit' ? 'roi' : 'profit'})} className={`text-[9px] font-black px-3 py-1.5 rounded-lg active:scale-95 transition-colors ${rankSort.by === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>按{rankSort.by === 'profit' ? '金額' : '報酬率'}</button>
+                                            <button onClick={() => setRankSort({ ...rankSort, order: rankSort.order === 'desc' ? 'asc' : 'desc'})} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{rankSort.order === 'desc' ? '↓ 最大' : '↑ 最小'}</button>
                                         </div>
                                     </div>
                                     <div className="glass-card p-7 space-y-6">
-                                        {globalStats.list.filter(s=>s.profit!==0).sort((a, b) => { let vA = rankSort.by === 'profit' ? a.profit : a.roi; let vB = rankSort.by === 'profit' ? b.profit : b.roi; return rankSort.order === 'desc' ? vB - vA : vA - vB; }).map((s,i)=>(
+                                        {globalStats.list.filter(s=>s.profit!==0).sort((a, b) => {
+                                            let vA = rankSort.by === 'profit' ? a.profit : a.roi; let vB = rankSort.by === 'profit' ? b.profit : b.roi;
+                                            return rankSort.order === 'desc' ? vB - vA : vA - vB;
+                                        }).map((s,i)=>(
                                             <div key={i} className="space-y-2">
                                                 <div className="flex justify-between text-[11px] font-black items-end"><span className="text-slate-500 uppercase">{s.symbol}</span><div className="text-right"><span className={s.profit>=0?'text-red-500':'text-green-600'}>{Math.round(s.profit).toLocaleString()}</span><span className="text-slate-400 ml-1 text-[9px]">({s.roi.toFixed(1)}%)</span></div></div>
                                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankSort.by === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankSort.by === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div></div>
@@ -385,14 +407,14 @@
                                 </section>
 
                                 <section className="space-y-4">
-                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3><button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
+                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3><button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
                                     <div className="glass-card p-8 flex flex-col items-center">
                                         <div className="w-full h-40 relative"><canvas id="stock-pie-canvas" /></div>
-                                        <div className="w-full mt-8 space-y-3">{globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockSort === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(<div key={i} className="flex justify-between text-[11px] font-black text-slate-600"><span>{h.symbol}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>))}</div>
+                                        <div className="w-full mt-8 space-y-3">{globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockSort === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(<div key={i} className="flex justify-between text-[11px] font-black text-slate-600 transition-all"><span>{h.symbol}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>))}</div>
                                     </div>
                                 </section>
                                 <section className="space-y-4">
-                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">銀行資金占比</h3><button onClick={() => setBankSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg">{bankSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
+                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">銀行資金占比</h3><button onClick={() => setBankSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{bankSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button></div>
                                     <div className="glass-card p-8 flex flex-col items-center">
                                         <div className="w-full h-40 relative"><canvas id="bank-pie-canvas" /></div>
                                         <div className="w-full mt-8 space-y-3">{data.settings.filter(s=>s.Category==='銀行').sort((a,b) => { const balA = parseNum(data.accountBalances[a.AccountName]), balB = parseNum(data.accountBalances[b.AccountName]); return bankSort === 'desc' ? balB - balA : balA - balB; }).map((acc, i) => { const bal = parseNum(data.accountBalances[acc.AccountName]), totalB = Object.values(data.accountBalances).reduce((a,b)=>a+b, 0) || 1; return (<div key={i} className="flex justify-between text-[11px] font-black text-slate-600"><span>{acc.AccountName}</span><span className="text-slate-800">${Math.round(bal).toLocaleString()} ({Math.round(bal/totalB*100)}%)</span></div>); })}</div>
@@ -407,7 +429,7 @@
                                 <section className="space-y-5">
                                     <div className="flex justify-between items-center px-2"><h3 className="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新券商',Category:'券商',LinkedBank:'',DiscountRate:'100',MinFee:'20'},...data.settings]})} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all">+ 新增</button></div>
                                     {data.settings?.filter(s=>s.Category==='券商').map((s,idx)=>(
-                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border-l-4 border-blue-500">
+                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
                                             <button onClick={()=>setData({...data,settings:data.settings.filter(x=>x!==s)})} className="absolute top-7 right-7 text-slate-300 active:text-red-400"><Icons.Trash /></button>
                                             <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-blue-600 border-b pb-1 w-full bg-transparent outline-none text-xl focus:border-blue-600" />
                                             <div className="space-y-4">
@@ -423,14 +445,14 @@
                                 <section className="space-y-5">
                                     <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新銀行',Category:'銀行',InterestRate:'0'},...data.settings]})} className="bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all">+ 新增</button></div>
                                     {data.settings?.filter(s=>s.Category==='銀行').map((s,idx)=>(
-                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border-l-4 border-slate-400">
+                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
                                             <button onClick={()=>setData({...data,settings:data.settings.filter(x=>x!==s)})} className="absolute top-7 right-7 text-slate-300 active:text-red-400"><Icons.Trash /></button>
                                             <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-slate-700 border-b pb-1 w-full bg-transparent outline-none text-xl focus:border-slate-700" />
                                             <div className="bg-slate-100/50 p-4 rounded-2xl flex flex-col"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">年利率 %</label><input type="number" step="0.1" value={s.InterestRate} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'InterestRate',e.target.value)} className="bg-transparent text-sm font-black outline-none" /></div>
                                         </div>
                                     ))}
                                 </section>
-                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存並同步到雲端</button></div>
+                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存設定到雲端</button></div>
                             </div>
                         )}
                     </main>
@@ -461,19 +483,18 @@
                                             </>
                                         ) : formMode === '除權息' ? (
                                             <>
-                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-blue-600">除息金額 ($)</label><input type="number" value={formData.dividendCash} onChange={e=>setFormData({...formData,dividendCash:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
                                                     <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (股)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
                                                 </div>
-                                                <div className="bg-blue-50/50 p-4 rounded-2xl flex items-start gap-3 border border-blue-100"><div className="bg-blue-600 p-1 rounded text-white"><Icons.ArrowRight className="w-3 h-3" /></div><p className="text-[10px] font-bold text-blue-800 leading-tight">現金將入銀行，股數將入券商庫存。</p></div>
                                             </>
                                         ) : (
                                             <>
-                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
-                                                    <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="單價/總額" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                    <input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
+                                                    <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="單價/總額" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
                                                 </div>
                                                 {currentCategory === '券商' && (
                                                     <>

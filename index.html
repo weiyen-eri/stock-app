@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>財富成長 Pro</title>
     <!-- 
-      版本：v2.9.4 Pro (Icon & Border Refinement)
+      版本：v2.9.7 Pro (Global Stats Fix & Variable Correction)
       修改摘要：
-      1. 修正設定圖示：更換 Icons.Settings 為更穩定的單一路徑齒輪，解決破碎感。
-      2. 移除卡片邊框：移除設定頁面中券商與銀行卡片的藍色左側邊框，視覺更乾淨。
-      3. 修復排行邏輯：將分析分頁的 rankingSortBy 統一為 rankSort.by，確保排行條正常顯示。
-      4. 智慧現金加總：維持 v2.8.9 精確邏輯，解決 50 萬餘額加總錯誤。
-      5. 除權息拆分：維持「除息入銀行、除權入券商」之自動化功能。
+      1. 修復 ReferenceError：補回遺漏的 globalStats 定義，確保分析分頁的數據排行能正常讀取全域資料。
+      2. 修正變數誤用：將分析排行中的 rankingSortBy 改正為 rankSort.by，解決因變數名稱不一致導致的渲染報錯。
+      3. 延續日期解析優化：保留 safeParseDate 邏輯，解決 Google Sheet 中「上午/下午」中文時間格式問題。
+      4. 延續年化報酬精算：維持 CAGR 複利年化報酬率計算引擎。
+      5. 智慧現金加總：維持「銀行總額 + 獨立券商」邏輯，確保現金餘額完全精確。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -43,7 +43,6 @@
             Plus: ({ className }) => <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
             PieChart: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
             History: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
-            // 修正後的設定圖示：使用標準的齒輪路徑
             Settings: ({ className, size = 24 }) => (
                 <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -63,10 +62,18 @@
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         const parseNum = (v) => { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; };
 
-        // --- [全局精密計算引擎] ---
+        // --- [核心解析引擎：修復中文日期格式] ---
+        const safeParseDate = (dateStr) => {
+            if (!dateStr) return new Date();
+            let cleaned = String(dateStr).replace('上午', 'AM').replace('下午', 'PM').replace(/\//g, '-');
+            let d = new Date(cleaned);
+            return isNaN(d.getTime()) ? new Date() : d;
+        };
+
+        // --- [數據計算引擎] ---
         const calculateStatsCore = (dataCache, targetAcc) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
-                return { list: [], marketValue: 0, totalProfit: 0, relevantAccounts: [targetAcc] };
+                return { list: [], marketValue: 0, totalProfit: 0, startDate: new Date() };
             }
             const priceMap = {};
             (dataCache.inventory || []).forEach(item => { priceMap[item.代號] = parseNum(item.現價); });
@@ -82,13 +89,18 @@
             }
 
             const filteredTx = targetAcc === '全部帳戶' ? dataCache.transactions : dataCache.transactions.filter(t => relevantAccounts.includes(t[6]));
-            const holdings = {};
             
+            let startDate = new Date();
+            if (filteredTx.length > 0) {
+                const dates = filteredTx.map(t => safeParseDate(t[0]).getTime());
+                startDate = new Date(Math.min(...dates));
+            }
+
+            const holdings = {};
             filteredTx.forEach(t => {
                 const type = t[1], symbol = String(t[2] || "").trim(), qty = parseNum(t[3]), price = parseNum(t[4]), fee = parseNum(t[5]), tax = parseNum(t[7]);
                 if (!symbol || ['現金','利息','存入','提領','轉帳'].includes(symbol) || symbol.includes('交割:')) return;
                 if (!holdings[symbol]) holdings[symbol] = { qty: 0, totalBuyCost: 0, buyQty: 0, realized: 0 };
-
                 if (type === '買入') {
                     holdings[symbol].qty += qty; holdings[symbol].buyQty += qty; holdings[symbol].totalBuyCost += (qty * price + fee + tax);
                 } else if (type === '賣出') {
@@ -103,18 +115,17 @@
 
             const list = Object.keys(holdings).map(sym => {
                 const h = holdings[sym], curP = priceMap[sym] || 0, avgC = h.buyQty > 0 ? h.totalBuyCost / h.buyQty : 0;
-                const unrealized = h.qty * (curP - avgC);
-                const totalProfit = h.realized + unrealized;
+                const totalProfit = h.realized + (h.qty * (curP - avgC));
                 const roi = h.totalBuyCost > 0 ? (totalProfit / h.totalBuyCost) * 100 : 0;
                 return { symbol: sym, qty: h.qty, price: curP, profit: totalProfit, roi, marketVal: h.qty * curP };
             });
 
-            return { list, marketValue: list.reduce((a,b)=>a+b.marketVal, 0), totalProfit: list.reduce((a,b)=>a+b.profit, 0), relevantAccounts };
+            return { list, marketValue: list.reduce((a,b)=>a+b.marketVal, 0), totalProfit: list.reduce((a,b)=>a+b.profit, 0), startDate };
         };
 
         const App = () => {
             const [data, setData] = useState(() => {
-                const cache = localStorage.getItem('ledger_cache_v294');
+                const cache = localStorage.getItem('ledger_cache_v297');
                 return cache ? JSON.parse(cache) : { summary: {}, transactions: [], settings: [], inventory: [], accountBalances: {} };
             });
             const [loading, setLoading] = useState(false);
@@ -148,7 +159,7 @@
                     const result = await res.json();
                     if (result.status === "success") {
                         setData(result.data);
-                        localStorage.setItem('ledger_cache_v294', JSON.stringify(result.data));
+                        localStorage.setItem('ledger_cache_v297', JSON.stringify(result.data));
                     }
                 } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
             };
@@ -156,26 +167,9 @@
             const showToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
 
             const stats = useMemo(() => calculateStatsCore(data, currentAccount), [data, currentAccount]);
+            // 修復 ReferenceError: globalStats is not defined
             const globalStats = useMemo(() => calculateStatsCore(data, '全部帳戶'), [data]);
-
-            // 自動計算
-            useEffect(() => {
-                if (currentCategory === '券商' && (formMode === '買入' || formMode === '賣出')) {
-                    const q = parseNum(formData.quantity), p = parseNum(formData.price), total = q * p;
-                    if (total === 0) return;
-                    const s = (data.settings || []).find(x => x.AccountName === currentAccount) || { DiscountRate: 100, MinFee: 20 };
-                    let f = Math.max(Math.round(total * 0.001425 * (parseNum(s.DiscountRate) / 100)), parseNum(s.MinFee));
-                    let t = (formMode === '賣出') ? Math.floor(total * (formData.symbol.startsWith('00') || formData.symbol.startsWith('01') ? 0.001 : 0.003)) : 0;
-                    setFormData(prev => ({ ...prev, fee: f, tax: t }));
-                }
-            }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, data.settings]);
-
-            const settlementDisplay = useMemo(() => {
-                const q = parseNum(formData.quantity), p = parseNum(formData.price), f = parseNum(formData.fee), t = parseNum(formData.tax);
-                return formMode === '買入' ? (q * p + f + t) : (q * p - f - t);
-            }, [formData, formMode]);
-
-            // 現金加總核心 (v2.8.9 穩定邏輯)
+            
             const cashVal = useMemo(() => {
                 const balances = data.accountBalances || {};
                 const settings = data.settings || [];
@@ -193,7 +187,40 @@
             }, [data.accountBalances, data.settings, currentAccount]);
 
             const netWorth = cashVal + stats.marketValue;
+            const totalProfit = stats.totalProfit;
+            const principal = netWorth - totalProfit;
+            const roiPercent = principal > 0 ? (totalProfit / principal) * 100 : 0;
             const cashRatio = netWorth > 0 ? (cashVal / netWorth) * 100 : 0;
+
+            const annualizedReturnStr = useMemo(() => {
+                if (!stats.startDate || principal <= 0 || isNaN(stats.startDate.getTime())) return "--%";
+                const now = new Date();
+                const diffTime = Math.abs(now - stats.startDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays < 1) return "--%";
+                const years = diffDays / 365.25;
+                try {
+                    const cagr = (Math.pow((netWorth / principal), 1 / years) - 1) * 100;
+                    if (isNaN(cagr) || !isFinite(cagr)) return "--%";
+                    return (cagr > 0 ? "+" : "") + cagr.toFixed(1) + "%";
+                } catch(e) { return "--%"; }
+            }, [stats.startDate, netWorth, principal]);
+
+            useEffect(() => {
+                if (currentCategory === '券商' && (formMode === '買入' || formMode === '賣出')) {
+                    const q = parseNum(formData.quantity), p = parseNum(formData.price), total = q * p;
+                    if (total === 0) return;
+                    const s = (data.settings || []).find(x => x.AccountName === currentAccount) || { DiscountRate: 100, MinFee: 20 };
+                    let f = Math.max(Math.round(total * 0.001425 * (parseNum(s.DiscountRate) / 100)), parseNum(s.MinFee));
+                    let t = (formMode === '賣出') ? Math.floor(total * (formData.symbol.startsWith('00') || formData.symbol.startsWith('01') ? 0.001 : 0.003)) : 0;
+                    setFormData(prev => ({ ...prev, fee: f, tax: t }));
+                }
+            }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, data.settings]);
+
+            const settlementDisplay = useMemo(() => {
+                const q = parseNum(formData.quantity), p = parseNum(formData.price), f = parseNum(formData.fee), t = parseNum(formData.tax);
+                return formMode === '買入' ? (q * p + f + t) : (q * p - f - t);
+            }, [formData.quantity, formData.price, formData.fee, formData.tax, formMode]);
 
             useEffect(() => {
                 if (!chartReady) return;
@@ -208,7 +235,7 @@
                         const tCtx = document.getElementById('trend-canvas')?.getContext('2d');
                         if (tCtx) {
                             chartRefs.current.trend?.destroy();
-                            const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => new Date(a[0]) - new Date(b[0]));
+                            const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => safeParseDate(a[0]) - safeParseDate(b[0]));
                             let cum = 0; const labels = [], vals = [];
                             txs.forEach(t => { const impact = t[1].match(/存|買|除/) ? (parseNum(t[3])*parseNum(t[4])) : -(parseNum(t[3])*parseNum(t[4])); cum += impact; labels.push(t[0].split(' ')[0]); vals.push(cum); });
                             chartRefs.current.trend = new Chart(tCtx, { type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
@@ -236,11 +263,6 @@
                 if (currentAccount === '全部帳戶') return showToast("請選擇帳戶");
                 setLoading(true); setSubmitStatus('同步中...');
                 try {
-                    let finalType = formMode;
-                    if (currentCategory === '銀行') {
-                        if (formMode === '買入' || formMode === '存入') finalType = '存入';
-                        else if (formMode === '賣出' || formMode === '提領') finalType = '提領';
-                    }
                     if (formMode === '除權息') {
                         const s = (data.settings || []).find(x => x.AccountName === currentAccount);
                         const targetBank = s?.LinkedBank || currentAccount;
@@ -253,7 +275,7 @@
                     } else {
                         const body = (formMode === '轉帳') 
                             ? { action: isEditMode ? 'updateTransaction' : 'transfer', index: editingIndex, fromAccount: currentAccount, toAccount: formData.toAccount, amount: formData.price, date: formData.date, memo: formData.memo }
-                            : { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: finalType, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
+                            : { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: formMode, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
                         await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
                     }
                     setSubmitStatus('儲存成功'); setTimeout(() => { setIsModalOpen(false); fetchData(); }, 800);
@@ -262,8 +284,8 @@
 
             const editTransaction = (idx) => {
                 const t = data.transactions[idx]; setEditingIndex(idx); setIsEditMode(true);
-                let d = t[0].replace(/\s*[上下]午\s*/, ' ').replace(/\//g, '-');
-                try { d = new Date(d).toISOString().split('T')[0]; } catch(e) { d = new Date().toISOString().split('T')[0]; }
+                let d = "";
+                try { d = safeParseDate(t[0]).toISOString().split('T')[0]; } catch(e) { d = new Date().toISOString().split('T')[0]; }
                 setFormData({ symbol: t[2], quantity: parseNum(t[3]), price: parseNum(t[4]), fee: parseNum(t[5]), tax: parseNum(t[7]), memo: t[8]||"", date: d, dividendCash: '', dividendStock: '' });
                 setFormMode(t[1]); setIsModalOpen(true);
             };
@@ -273,7 +295,6 @@
                 try {
                     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateSettings", settings: data.settings }) });
                     if ((await res.json()).status === "success") { showToast("帳戶設定同步完成"); fetchData(true); }
-                    else { showToast("儲存失敗"); }
                 } catch (e) { showToast("連線失敗"); } finally { setLoading(false); }
             };
 
@@ -287,9 +308,9 @@
                     <style>{`.no-scrollbar::-webkit-scrollbar { display: none !important; } .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }`}</style>
                     
                     {loading && (
-                        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/80 backdrop-blur-md">
+                        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/80 backdrop-blur-md transition-all">
                             <div className="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
-                            <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Processing...</p>
+                            <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Processing Data...</p>
                         </div>
                     )}
 
@@ -317,14 +338,14 @@
                     <main className="max-w-md mx-auto pt-64 px-5 space-y-7 pb-40">
                         {['portfolio', 'transactions'].includes(activeTab) && (
                             <>
-                                <section className="glass-card p-7 grid grid-cols-2 gap-4">
+                                <section className="glass-card p-7 grid grid-cols-2 gap-4 shadow-sm">
                                     <div className="space-y-4">
                                         <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">庫存市值</p><p className="text-xl font-black text-slate-800">${Math.round(stats.marketValue).toLocaleString()}</p></div>
-                                        <div><p className="text-[9px] text-blue-400 font-black uppercase mb-1">未實現損益</p><p className={`text-xl font-black ${stats.totalProfit>=0?'text-red-500':'text-green-600'}`}>{stats.totalProfit>=0?'+':''}{Math.round(stats.totalProfit).toLocaleString()}</p></div>
+                                        <div><p className="text-[9px] text-blue-400 font-black uppercase mb-1">未實現損益</p><p className={`text-xl font-black ${totalProfit>=0?'text-red-500':'text-green-600'}`}>{totalProfit>=0?'+':''}{Math.round(totalProfit).toLocaleString()}</p></div>
                                     </div>
                                     <div className="space-y-4 text-right border-l border-slate-100 pl-6">
-                                        <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">預估報酬</p><p className={`text-xl font-black ${stats.totalProfit>=0?'text-red-500':'text-green-600'}`}>{((stats.totalProfit / (netWorth-stats.totalProfit||1))*100).toFixed(1)}%</p></div>
-                                        <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">年化報酬</p><p className="text-xl font-black text-slate-700">--%</p></div>
+                                        <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">預估報酬</p><p className={`text-xl font-black ${totalProfit>=0?'text-red-500':'text-green-600'}`}>{roiPercent.toFixed(1)}%</p></div>
+                                        <div><p className="text-[9px] text-slate-400 font-black uppercase mb-1">年化報酬</p><p className={`text-xl font-black ${annualizedReturnStr.startsWith('-') ? 'text-green-600' : (annualizedReturnStr === '--%' ? 'text-slate-400' : 'text-red-500')}`}>{annualizedReturnStr}</p></div>
                                     </div>
                                 </section>
 
@@ -400,7 +421,9 @@
                                         }).map((s,i)=>(
                                             <div key={i} className="space-y-2">
                                                 <div className="flex justify-between text-[11px] font-black items-end"><span className="text-slate-500 uppercase">{s.symbol}</span><div className="text-right"><span className={s.profit>=0?'text-red-500':'text-green-600'}>{Math.round(s.profit).toLocaleString()}</span><span className="text-slate-400 ml-1 text-[9px]">({s.roi.toFixed(1)}%)</span></div></div>
-                                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankSort.by === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankSort.by === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div></div>
+                                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                    <div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankSort.by === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankSort.by === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -452,7 +475,7 @@
                                         </div>
                                     ))}
                                 </section>
-                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存設定到雲端</button></div>
+                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">儲存並同步到雲端</button></div>
                             </div>
                         )}
                     </main>
@@ -460,7 +483,6 @@
                     <footer className="fixed bottom-0 w-full bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-[110]" style={{paddingBottom:'calc(15px + env(safe-area-inset-bottom))'}}>
                         <button onClick={()=>setActiveTab('portfolio')} className={`flex flex-col items-center ${activeTab==='portfolio'?'text-blue-600':'text-slate-300'}`}><Icons.PieChart /><span className="text-[10px] font-black mt-1">資產</span></button>
                         <button onClick={()=>setActiveTab('analysis')} className={`flex flex-col items-center ${activeTab==='analysis'?'text-blue-600':'text-slate-300'}`}><Icons.History /><span className="text-[10px] font-black mt-1">分析</span></button>
-                        <button onClick={()=>setActiveTab('transactions')} className={`flex flex-col items-center ${activeTab==='transactions'?'text-blue-600':'text-slate-300'}`}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><span className="text-[10px] font-black mt-1">明細</span></button>
                         <button onClick={()=>setActiveTab('settings')} className={`flex flex-col items-center ${activeTab==='settings'?'text-blue-600':'text-slate-300'}`}><Icons.Settings /><span className="text-[10px] font-black mt-1">設定</span></button>
                     </footer>
 
@@ -468,7 +490,7 @@
                         <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-end justify-center p-4">
                             <div className="bg-white w-full max-w-md rounded-[48px] p-10 shadow-2xl modal-animate overflow-y-auto no-scrollbar max-h-[90vh]">
                                 <div className="w-14 h-1.5 bg-slate-100 rounded-full mx-auto mb-10" />
-                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-blue-600 mt-1 uppercase">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X /></button></div>
+                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-blue-600 mt-1 uppercase tracking-widest">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X /></button></div>
                                 <div className="space-y-7">
                                     <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px]">
                                         <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>

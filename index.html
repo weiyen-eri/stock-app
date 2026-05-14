@@ -409,7 +409,10 @@
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-1"><span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">{h.symbol}</span><span className="text-slate-500 text-[10px] font-bold">{h.name}</span></div>
                                                         <p className="text-2xl font-black text-slate-800 tracking-tighter">${h.price.toLocaleString()}</p>
-                                                        <div className="mt-1"><span className="text-[9px] font-bold text-slate-400">還原均價: ${h.adjustedAvgCost.toFixed(2)}</span></div>
+                                                        <div className="mt-1 flex flex-col gap-0.5">
+                              <span className="text-[9px] font-bold text-slate-400">股數/市值: {h.qty.toLocaleString()} / ${Math.round(h.marketVal).toLocaleString()}</span>
+                              <span className="text-[9px] font-bold text-slate-400">還原均價: ${h.adjustedAvgCost.toFixed(2)}</span>
+                            </div>
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總損益 (含息)</p>

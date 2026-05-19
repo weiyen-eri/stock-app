@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>財富成長 Pro v3.0.5</title>
+    <title>財富成長 Pro v3.0.8</title>
     <!-- 
-      版本: v3.0.5 Pro (Transfer UI Optimization)
+      版本: v3.0.8 Pro (Auto Tax & Fee Calculation Engine)
       更新內容:
-      1. 銀行新增介面：將「利息」替換為「轉帳」，並新增轉入帳戶下拉選單。
-      2. 數量預設值：所有新增交易的「數量」欄位預設帶入為 "1"。
-      3. 資產卡片強化：保留資產配置頁面的「股數 / 總市值」顯示。
-      4. 總報酬 (Total Return) 系統：實作還原均價計算，將 [現金股利 + 股票股利 + 借券利息] 全數納入績效。
-      5. 股票名稱連動：資產清單與分析排行同步顯示 [代號 + 中文名稱] (對應 Inventory 工作表)。
-      6. UI 視覺完備：優化 Icons 繪製，移除設定卡片藍框，徹底隱藏 Header 滾動條。
+      1. 新增證券交易自動計算：交易時自動依據券商折扣與最低規費計算手續費；賣出時自動依標的種類（股票 0.3% / ETF 0.1% / 債券 ETF 免稅）精算交易稅。
+      2. 數量預設值：所有新增交易介面的「數量」欄位預設帶入為 "1"。
+      3. 銀行轉帳 UI：銀行端功能優化為「存入/提領/轉帳」，並支援轉入帳戶選擇。
+      4. 資產卡片強化：資產配置頁面顯示「股數 / 總市值」 (例如: 20 / $4,000)。
+      5. 旗艦邏輯繼承：維持 v3.0.3 與 v3.0.7 定案之總報酬系統、名稱連動、智慧現金加總與日期解析引擎，視覺維持不破碎齒輪與無藍框極簡卡片。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -52,19 +51,19 @@
             ),
             Search: ({ className }) => <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
             TrendingUp: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>,
-            TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
+            TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
             Trash2: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
             Edit3: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
             Save: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
             X: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-            Landmark: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7 12 2"/></svg>,
+            Landmark: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7 12 2"/></svg>,
             ArrowRight: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         };
 
         const API_URL = "https://script.google.com/macros/s/AKfycbwX_n3F8up4yUUAsZASvTOccLDAJCe5ZJWQKC0gUSlqnF2lIZhAlQe87dnotrzrStZl/exec";
         const parseNum = (v) => { const n = parseFloat(String(v || 0).replace(/[,$\s]/g, '')); return isNaN(n) ? 0 : n; };
 
-        // --- [核心解析引擎：處理中文上下午格式] ---
+        // --- [日期解析引擎] ---
         const safeParseDate = (dateStr) => {
             if (!dateStr) return new Date();
             let cleaned = String(dateStr).replace('上午', 'AM').replace('下午', 'PM').replace(/\//g, '-');
@@ -72,19 +71,17 @@
             return isNaN(d.getTime()) ? new Date() : d;
         };
 
-        // --- [數據計算引擎 - 總報酬版] ---
+        // --- [數據計算引擎] ---
         const calculateStatsCore = (dataCache, targetAcc) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
                 return { list: [], marketValue: 0, totalProfit: 0, startDate: new Date() };
             }
-
             const priceMap = {};
             const nameMap = {};
             (dataCache.inventory || []).forEach(item => {
                 priceMap[item.代號] = parseNum(item.現價);
                 nameMap[item.代號] = item.名稱 || ""; 
             });
-
             let relevantAccounts = [targetAcc];
             if (targetAcc !== '全部帳戶') {
                 const sets = dataCache.settings || [];
@@ -94,26 +91,20 @@
                     relevantAccounts = [...relevantAccounts, ...linkedBrokers];
                 }
             }
-
             const filteredTx = targetAcc === '全部帳戶' ? dataCache.transactions : dataCache.transactions.filter(t => relevantAccounts.includes(t[6]));
-            
             let startDate = new Date();
             if (filteredTx.length > 0) {
                 const dates = filteredTx.map(t => safeParseDate(t[0]).getTime());
                 startDate = new Date(Math.min(...dates));
             }
-
             const holdings = {};
             filteredTx.forEach(t => {
                 const type = t[1], symbol = String(t[2] || "").trim();
                 const qty = parseNum(t[3]), price = parseNum(t[4]), fee = parseNum(t[5]), tax = parseNum(t[7]);
-                
                 const isEarnings = symbol.startsWith('股息:') || symbol.startsWith('利息:');
                 const cleanSym = symbol.replace(/^(股息:|利息:)/, '');
-
                 if (!cleanSym || ['現金','利息','存入','提領','轉帳'].includes(cleanSym) || cleanSym.includes('交割:')) return;
                 if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
-
                 if (type === '買入') {
                     holdings[cleanSym].qty += qty; holdings[cleanSym].buyQty += qty; holdings[cleanSym].totalBuyCost += (qty * price + fee + tax);
                 } else if (type === '賣出') {
@@ -121,42 +112,21 @@
                     holdings[cleanSym].realized += ((qty * price - fee - tax) - (qty * avgCost));
                     holdings[cleanSym].qty -= qty;
                 } else if (type === '除權息') {
-                    if (isEarnings) {
-                        holdings[cleanSym].dividendIncome += price;
-                    } else {
-                        holdings[cleanSym].qty += qty;
-                        holdings[cleanSym].dividendIncome += price; 
-                    }
+                    if (isEarnings) holdings[cleanSym].dividendIncome += price;
+                    else { holdings[cleanSym].qty += qty; holdings[cleanSym].dividendIncome += price; }
                 } else if (type === '收益') {
                     holdings[cleanSym].dividendIncome += price;
                 }
             });
-
             const list = Object.keys(holdings).map(sym => {
                 const h = holdings[sym], curP = priceMap[sym] || 0, avgC = h.buyQty > 0 ? h.totalBuyCost / h.buyQty : 0;
                 const unrealizedGain = h.qty * (curP - avgC);
                 const totalProfit = h.realized + unrealizedGain + h.dividendIncome;
                 const roi = h.totalBuyCost > 0 ? (totalProfit / h.totalBuyCost) * 100 : 0;
                 const adjustedAvgCost = h.qty > 0 ? (h.totalBuyCost - h.dividendIncome - h.realized) / h.qty : 0;
-                
-                return { 
-                    symbol: sym, 
-                    name: nameMap[sym] || "", 
-                    qty: h.qty, 
-                    price: curP, 
-                    profit: totalProfit, 
-                    roi, 
-                    marketVal: h.qty * curP, 
-                    adjustedAvgCost
-                };
+                return { symbol: sym, name: nameMap[sym] || "", qty: h.qty, price: curP, profit: totalProfit, roi, marketVal: h.qty * curP, adjustedAvgCost };
             });
-
-            return { 
-                list, 
-                marketValue: list.reduce((a,b)=>a+b.marketVal, 0), 
-                totalProfit: list.reduce((a,b)=>a+b.profit, 0), 
-                startDate 
-            };
+            return { list, marketValue: list.reduce((a,b)=>a+b.marketVal, 0), totalProfit: list.reduce((a,b)=>a+b.profit, 0), startDate };
         };
 
         const App = () => {
@@ -178,10 +148,7 @@
             const [editingIndex, setEditingIndex] = useState(-1);
             const [submitStatus, setSubmitStatus] = useState('確認並儲存');
             const [formMode, setFormMode] = useState('買入');
-            const [formData, setFormData] = useState({ 
-                symbol: '', quantity: '1', price: '', fee: 0, tax: 0, memo: '', 
-                dividendCash: '', dividendStock: '', toAccount: '', date: new Date().toISOString().split('T')[0] 
-            });
+            const [formData, setFormData] = useState({ symbol: '', quantity: '1', price: '', fee: 0, tax: 0, memo: '', dividendCash: '', dividendStock: '', toAccount: '', date: new Date().toISOString().split('T')[0] });
 
             const [rankSort, setRankSort] = useState({ by: 'profit', order: 'desc' });
             const [stockSort, setStockSort] = useState('desc');
@@ -189,10 +156,7 @@
 
             const chartRefs = useRef({ allocation: null, trend: null, stock: null, bank: null });
 
-            useEffect(() => { 
-                if (window.Chart) setChartReady(true);
-                fetchData(data.transactions.length === 0); 
-            }, []);
+            useEffect(() => { if (window.Chart) setChartReady(true); fetchData(data.transactions.length === 0); }, []);
 
             const fetchData = async (full = false) => {
                 if (full) setLoading(true);
@@ -247,6 +211,62 @@
                 } catch(e) { return "--%"; }
             }, [stats.startDate, netWorth, principal]);
 
+            const settlementDisplay = useMemo(() => {
+                const q = parseNum(formData.quantity), p = parseNum(formData.price), f = parseNum(formData.fee), t = parseNum(formData.tax);
+                return formMode === '買入' ? (q * p + f + t) : (q * p - f - t);
+            }, [formData.quantity, formData.price, formData.fee, formData.tax, formMode]);
+
+            // --- [新增自動帶入手續費與交易稅功能] ---
+            useEffect(() => {
+                if (currentCategory === '券商' && (formMode === '買入' || formMode === '賣出')) {
+                    const q = parseNum(formData.quantity);
+                    const p = parseNum(formData.price);
+                    const total = q * p;
+                    if (total === 0) {
+                        setFormData(prev => ({ ...prev, fee: 0, tax: 0 }));
+                        return;
+                    }
+
+                    // 尋找當前券商設定
+                    const brokerSetting = (data.settings || []).find(x => x.AccountName === currentAccount) || { DiscountRate: 100, MinFee: 20 };
+                    const discountRate = parseNum(brokerSetting.DiscountRate || 100);
+                    const minFee = parseNum(brokerSetting.MinFee || 20);
+
+                    // 手續費計算 (千分之一點四二五 * 折扣百分比)
+                    const rawFee = total * 0.001425 * (discountRate / 100);
+                    const calculatedFee = Math.max(Math.round(rawFee), minFee);
+
+                    // 交易稅計算 (僅賣出時課徵，台灣股票 0.3%, ETF 0.1%, 債券 ETF 0%)
+                    let calculatedTax = 0;
+                    if (formMode === '賣出') {
+                        const sym = String(formData.symbol || "").trim().toUpperCase();
+                        if (sym.endsWith('B')) {
+                            calculatedTax = 0; // 債券型 ETF 免稅
+                        } else if (sym.startsWith('0') || sym.startsWith('9')) { // 指數股票型基金 ETF
+                            calculatedTax = Math.floor(total * 0.001); // ETF 0.1% 
+                        } else {
+                            calculatedTax = Math.floor(total * 0.003); // 一般股票 0.3%
+                        }
+                    }
+
+                    setFormData(prev => {
+                        // 僅在發生實質變更時才觸發 setState，避免重複調用
+                        if (prev.fee !== calculatedFee || prev.tax !== calculatedTax) {
+                            return { ...prev, fee: calculatedFee, tax: calculatedTax };
+                        }
+                        return prev;
+                    });
+                } else {
+                    // 非證券交易買賣則歸零
+                    setFormData(prev => {
+                        if (prev.fee !== 0 || prev.tax !== 0) {
+                            return { ...prev, fee: 0, tax: 0 };
+                        }
+                        return prev;
+                    });
+                }
+            }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, currentCategory, data.settings]);
+
             useEffect(() => {
                 if (!chartReady) return;
                 const render = () => {
@@ -285,14 +305,11 @@
                         const targetBank = s?.LinkedBank || currentAccount;
                         if (parseNum(formData.dividendCash) > 0) await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'insert', type: '除權息', account: targetBank, symbol: `股息:${formData.symbol}`, quantity: 1, price: formData.dividendCash, fee: 0, tax: 0, date: formData.date, memo: formData.memo }) });
                         if (parseNum(formData.dividendStock) > 0) await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'insert', type: '除權息', account: currentAccount, symbol: formData.symbol, quantity: formData.dividendStock, price: 0, fee: 0, tax: 0, date: formData.date, memo: formData.memo }) });
-                    } else if (formMode === '利息') {
-                        const s = (data.settings || []).find(x => x.AccountName === currentAccount);
-                        const targetBank = s?.LinkedBank || currentAccount;
-                        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'insert', type: '收益', account: targetBank, symbol: `利息:${formData.symbol}`, quantity: 1, price: formData.price, fee: 0, tax: 0, date: formData.date, memo: formData.memo }) });
+                    } else if (formMode === '轉帳') {
+                        const body = { action: 'transfer', fromAccount: currentAccount, toAccount: formData.toAccount, amount: formData.price, date: formData.date, memo: formData.memo };
+                        await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
                     } else {
-                        const body = (formMode === '轉帳') 
-                            ? { action: isEditMode ? 'updateTransaction' : 'transfer', index: editingIndex, fromAccount: currentAccount, toAccount: formData.toAccount, amount: formData.price, date: formData.date, memo: formData.memo }
-                            : { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: formMode, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
+                        const body = { action: isEditMode ? 'updateTransaction' : 'insert', index: editingIndex, type: formMode, account: currentAccount, symbol: formData.symbol, quantity: formData.quantity, price: formData.price, fee: formData.fee, tax: formData.tax, date: formData.date, memo: formData.memo };
                         await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
                     }
                     setSubmitStatus('儲存成功'); setTimeout(() => { setIsModalOpen(false); fetchData(); }, 800);
@@ -442,7 +459,7 @@
                                                     </div>
                                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center active:scale-90"><Icons.Edit3 size={12}/></button>
-                                                        <button onClick={()=>deleteTransaction(item.idx)} className="w-7 h-7 bg-red-400 text-white rounded-full flex items-center justify-center active:scale-90 shadow-md"><Icons.Trash2 size={12}/></button>
+                                                        <button onClick={()=>deleteTransaction(item.idx)} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90"><Icons.Trash2 size={12}/></button>
                                                     </div>
                                                 </div>
                                             );
@@ -471,6 +488,15 @@
                                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full ${s.profit>=0?'bg-red-500':'bg-green-500'}`} style={{width:`${Math.min(100,(Math.abs(rankSort.by === 'profit' ? s.profit : s.roi)/Math.max(...globalStats.list.map(x=>Math.abs(rankSort.by === 'profit' ? x.profit : x.roi)),1))*100)}%`}}></div></div>
                                             </div>
                                         ))}
+                                    </div>
+                                </section>
+                                <section className="space-y-4">
+                                    <div className="flex justify-between items-center px-2">
+                                        <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3>
+                                        <button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button>
+                                    </div>
+                                    <div className="glass-card p-8 flex flex-col items-center">
+                                        <div className="w-full mt-2 space-y-3">{globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockSort === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(<div key={i} className="flex justify-between text-[11px] font-black text-slate-600 transition-all"><span>{h.symbol} {h.name}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>))}</div>
                                     </div>
                                 </section>
                             </div>
@@ -520,7 +546,7 @@
                         <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-end justify-center p-4">
                             <div className="bg-white w-full max-w-md rounded-[48px] p-10 shadow-2xl modal-animate overflow-y-auto no-scrollbar max-h-[90vh]">
                                 <div className="w-14 h-1.5 bg-slate-100 rounded-full mx-auto mb-10" />
-                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-blue-600 mt-1 uppercase tracking-widest">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X /></button></div>
+                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-blue-600 mt-1 uppercase tracking-widest">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X size={20}/></button></div>
                                 <div className="space-y-7">
                                     <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px]">
                                         <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>

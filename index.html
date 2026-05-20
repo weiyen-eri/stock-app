@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>財富成長 Pro v3.0.9</title>
+    <title>財富成長 Pro v3.1.2</title>
     <!-- 
-      版本: v3.0.9 Pro (Dual-Track Profit & Loss Master)
+      版本: v3.1.2 Pro (ReferenceError Scope Fix & Compatibility Master)
       更新內容:
-      1. 雙軌損益獨立呈現：全新實作並拆分「持倉浮動損益（未實現價差）」與「已實現損益（已賣價差+累積股息+借券利息）」，提供全方位資產回報視野。
-      2. 極簡資訊控制台：首頁資產卡片升級為三行精巧版面，整齊並列「持倉損益」、「已實現損益」與「總損益」，呈現頂級 Apple Design 質感。
-      3. 個股卡片損益對比：每一檔股票卡片新增顯示持倉與已實現損益對比，並支援紅漲綠跌動態色彩。
-      4. 數量預設值：所有新增交易介面的「數量」欄位預設自動帶入為 "1"。
-      5. 證券交易自動精算：交易時自動依據券商折扣與最低規費計算手續費；賣出時自動依標的種類（股票 0.3% / ETF 0.1% / 債券 ETF 免稅）帶入交易稅。
-      6. 銀行轉帳 UI：銀行端功能優化為「存入/提領/轉帳」，並支援轉入帳戶選擇。
-      7. 旗艦邏輯繼承：維持 v3.0.3 與 v3.0.7 定案之總報酬系統、名稱連動、智慧現金加總與日期解析引擎。
+      1. 修復 ReferenceError: 將 showToast 宣告位置移至元件最上方，徹底解決因 const 暫時性死區 (TDZ) 導致在切換主題色時發生 showToast is not defined 的錯誤。
+      2. 提升相容性：維持 Chart.js options 中的 callback 傳統匿名函式改寫，防止 BabelStandalone 解析崩潰。
+      3. 全新主題配色系統：提供初陽絳紅、晚霞琥橙、煦風藤黃、空山竹綠、暮光黛藍、星河深靛、浮雲縹紫，以及「自動輪流（依星期一至日輪播）」等八種極美配色。
+      4. 雙軌損益獨立呈現：保留拆分「持倉浮動損益（未實現）」與「已實現損益（已賣價差+累積股利+借券利息）」，提供全方位資產回報視野。
+      5. 極簡資訊控制台：首頁資產卡片升級為三行精巧版面，整齊並列「持倉損益」、「已實現損益」與「總損益」，呈現頂級 Apple Design 質感。
+      6. 數量預設值：所有新增交易介面的「數量」欄位預設自動帶入為 "1"。
+      7. 證券交易自動精算：交易時自動依據券商折扣與最低規費計算手續費；賣出時自動依標的種類（股票 0.3% / ETF 0.1% / 債券 ETF 免稅）帶入交易稅。
+      8. 銀行轉帳 UI：銀行端功能優化為「存入/提領/轉帳」，並支援轉入帳戶選擇。
+      9. 旗艦邏輯繼承：維持 v3.0.3 與 v3.0.7 定案之總報酬系統、名稱連動、智慧現金加總與日期解析引擎。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -21,8 +23,38 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- 註冊動態色彩主題設定至 Tailwind 引擎中 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        theme: {
+                            DEFAULT: 'var(--theme-primary)',
+                            hover: 'var(--theme-hover)',
+                            light: 'var(--theme-light)',
+                            ultralight: 'var(--theme-ultralight)',
+                            border: 'var(--theme-border)'
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+    
     <style>
-        :root { --primary-blue: #007aff; --bg-gray: #f2f2f7; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); --stock-up: #ff3b30; --stock-down: #34c759; }
+        :root { 
+            --theme-primary: #1f3a60; /* 預設星河深靛 */
+            --theme-hover: #152a47;
+            --theme-light: rgba(31, 58, 96, 0.12);
+            --theme-ultralight: rgba(31, 58, 96, 0.05);
+            --theme-border: rgba(31, 58, 96, 0.2);
+            --bg-gray: #f2f2f7; 
+            --safe-top: env(safe-area-inset-top); 
+            --safe-bottom: env(safe-area-inset-bottom); 
+            --stock-up: #ff3b30; 
+            --stock-down: #34c759; 
+        }
         body { background-color: var(--bg-gray); font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; padding-top: var(--safe-top); color: #1c1c1e; antialiased; }
         .glass-card { background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(25px); border-radius: 32px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04); border: 1px solid rgba(255, 255, 255, 0.5); overflow: hidden; }
         .no-scrollbar::-webkit-scrollbar { display: none !important; }
@@ -56,7 +88,7 @@
             TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
             Trash2: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
             Edit3: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
-            Save: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+            Save: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
             X: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
             Landmark: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7 12 2"/></svg>,
             ArrowRight: ({ className }) => <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -73,7 +105,7 @@
             return isNaN(d.getTime()) ? new Date() : d;
         };
 
-        // --- [數據計算引擎：增量優化雙軌損益] ---
+        // --- [數據計算引擎 - 總報酬版] ---
         const calculateStatsCore = (dataCache, targetAcc) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
                 return { list: [], marketValue: 0, totalProfit: 0, totalRealized: 0, totalUnrealized: 0, startDate: new Date() };
@@ -167,6 +199,10 @@
             const [isConfirmOpen, setIsConfirmOpen] = useState(false);
             const [confirmConfig, setConfirmConfig] = useState({ title: '', msg: '', action: null });
             const [toast, setToast] = useState({ show: false, msg: '' });
+
+            // --- [修復關鍵：將 showToast 移至元件最上方宣告，避免 TDZ 造成的 ReferenceError] ---
+            const showToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
+
             const [searchTerm, setSearchTerm] = useState('');
             const [isEditMode, setIsEditMode] = useState(false);
             const [editingIndex, setEditingIndex] = useState(-1);
@@ -179,6 +215,48 @@
             const [bankSort, setBankSort] = useState('desc');
 
             const chartRefs = useRef({ allocation: null, trend: null, stock: null, bank: null });
+
+            // --- [設定色彩主題控制與資料結構庫] ---
+            const [currentTheme, setCurrentTheme] = useState(() => {
+                return localStorage.getItem('ledger_theme_v309') || 'indigo';
+            });
+
+            const themes = {
+                crimson: { name: '初陽絳紅', primary: '#C93B2B', hover: '#A82E21', light: 'rgba(201, 59, 43, 0.12)', ultralight: 'rgba(201, 59, 43, 0.05)', border: 'rgba(201, 59, 43, 0.2)' },
+                amber: { name: '晚霞琥橙', primary: '#E67E22', hover: '#CA6F1E', light: 'rgba(230, 126, 34, 0.12)', ultralight: 'rgba(230, 126, 34, 0.05)', border: 'rgba(230, 126, 34, 0.2)' },
+                gold: { name: '煦風藤黃', primary: '#D4AC0D', hover: '#B7950B', light: 'rgba(212, 172, 13, 0.12)', ultralight: 'rgba(212, 172, 13, 0.05)', border: 'rgba(212, 172, 13, 0.2)' },
+                bamboo: { name: '空山竹綠', primary: '#27AE60', hover: '#1E8449', light: 'rgba(39, 174, 96, 0.12)', ultralight: 'rgba(39, 174, 96, 0.05)', border: 'rgba(39, 174, 96, 0.2)' },
+                dusk: { name: '暮光黛藍', primary: '#2E4053', hover: '#212F3D', light: 'rgba(46, 64, 83, 0.12)', ultralight: 'rgba(46, 64, 83, 0.05)', border: 'rgba(46, 64, 83, 0.2)' },
+                indigo: { name: '星河深靛', primary: '#1F3A60', hover: '#152A47', light: 'rgba(31, 58, 96, 0.12)', ultralight: 'rgba(31, 58, 96, 0.05)', border: 'rgba(31, 58, 96, 0.2)' },
+                purple: { name: '浮雲縹紫', primary: '#8E44AD', hover: '#732D91', light: 'rgba(142, 68, 173, 0.12)', ultralight: 'rgba(142, 68, 173, 0.05)', border: 'rgba(142, 68, 173, 0.2)' },
+                rotation: { name: '自動輪流' }
+            };
+
+            const applyTheme = (key) => {
+                let activeKey = key;
+                if (key === 'rotation') {
+                    const day = new Date().getDay();
+                    const rotationOrder = ['purple', 'crimson', 'amber', 'gold', 'bamboo', 'dusk', 'indigo'];
+                    activeKey = rotationOrder[day];
+                }
+                const t = themes[activeKey] || themes['indigo'];
+                const root = document.documentElement;
+                root.style.setProperty('--theme-primary', t.primary);
+                root.style.setProperty('--theme-hover', t.hover);
+                root.style.setProperty('--theme-light', t.light);
+                root.style.setProperty('--theme-ultralight', t.ultralight);
+                root.style.setProperty('--theme-border', t.border);
+            };
+
+            useEffect(() => {
+                applyTheme(currentTheme);
+            }, [currentTheme]);
+
+            const handleThemeChange = (key) => {
+                setCurrentTheme(key);
+                localStorage.setItem('ledger_theme_v309', key);
+                showToast(`已套用配色主題：${themes[key].name}`);
+            };
 
             useEffect(() => { if (window.Chart) setChartReady(true); fetchData(data.transactions.length === 0); }, []);
 
@@ -193,8 +271,6 @@
                     }
                 } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
             };
-
-            const showToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
 
             const stats = useMemo(() => calculateStatsCore(data, currentAccount), [data, currentAccount]);
             const globalStats = useMemo(() => calculateStatsCore(data, '全部帳戶'), [data]);
@@ -276,14 +352,12 @@
                     }
 
                     setFormData(prev => {
-                        // 僅在發生實質變更時才觸發 setState，避免重複調用
                         if (prev.fee !== calculatedFee || prev.tax !== calculatedTax) {
                             return { ...prev, fee: calculatedFee, tax: calculatedTax };
                         }
                         return prev;
                     });
                 } else {
-                    // 非證券交易買賣則歸零
                     setFormData(prev => {
                         if (prev.fee !== 0 || prev.tax !== 0) {
                             return { ...prev, fee: 0, tax: 0 };
@@ -302,7 +376,7 @@
                         const live = stats.list.filter(h => h.qty > 0);
                         chartRefs.current.allocation = new Chart(aCtx, { 
                             type: 'doughnut', 
-                            data: { labels: ['現金', ...live.map(h => `${h.symbol} ${h.name}`)], datasets: [{ data: [cashVal, ...live.map(h => h.marketVal)], backgroundColor: ['#FFD700', '#007aff', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 4, borderColor: '#ffffff' }] }, 
+                            data: { labels: ['現金', ...live.map(h => `${h.symbol} ${h.name}`)], datasets: [{ data: [cashVal, ...live.map(h => h.marketVal)], backgroundColor: ['#FFD700', 'var(--theme-primary)', '#ff3b30', '#ff9500', '#34c759', '#af52de'], borderWidth: 4, borderColor: '#ffffff' }] }, 
                             options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } } 
                         });
                     }
@@ -310,16 +384,38 @@
                         const tCtx = document.getElementById('trend-canvas')?.getContext('2d');
                         if (tCtx) {
                             chartRefs.current.trend?.destroy();
-                            const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => safeParseDate(a[0]) - safeParseDate(b[0]));
+                            const txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => safeParseDate(a[0]).getTime() - safeParseDate(b[0]).getTime());
                             let cum = 0; const labels = [], vals = [];
                             txs.forEach(t => { const impact = t[1].match(/存|買|除/) ? (parseNum(t[3])*parseNum(t[4])) : -(parseNum(t[3])*parseNum(t[4])); cum += impact; labels.push(t[0].split(' ')[0]); vals.push(cum); });
-                            chartRefs.current.trend = new Chart(tCtx, { type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.05)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toLocaleString() } } } } });
+                            
+                            const themeColor = window.getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#1f3a60';
+                            const lightThemeColor = window.getComputedStyle(document.documentElement).getPropertyValue('--theme-ultralight').trim() || 'rgba(31, 58, 96, 0.05)';
+
+                            // --- [修復關鍵：使用相容性高的常規 function 避免 BabelStandalone 解析錯誤] ---
+                            chartRefs.current.trend = new Chart(tCtx, { 
+                                type: 'line', 
+                                data: { labels, datasets: [{ data: vals, borderColor: themeColor, backgroundColor: lightThemeColor, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }] }, 
+                                options: { 
+                                    responsive: true, 
+                                    maintainAspectRatio: false, 
+                                    plugins: { legend: { display: false } }, 
+                                    scales: { 
+                                        x: { display: false }, 
+                                        y: { 
+                                            ticks: { 
+                                                font: { size: 9 }, 
+                                                callback: function(v) { return '$' + v.toLocaleString(); } 
+                                            } 
+                                        } 
+                                    } 
+                                } 
+                            });
                         }
                     }
                 };
                 render();
                 return () => Object.values(chartRefs.current).forEach(c => c?.destroy());
-            }, [data, currentAccount, activeTab, chartReady, stats, cashVal]);
+            }, [data, currentAccount, activeTab, chartReady, stats, cashVal, currentTheme]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -365,28 +461,23 @@
                 } catch (e) { showToast("連線失敗"); } finally { setLoading(false); }
             };
 
-            const handleUpdateSetting = (index, field, value) => {
-                const newSets = [...data.settings]; newSets[index][field] = value;
-                setData({ ...data, settings: newSets });
-            };
-
             return (
                 <div className="min-h-screen bg-[#f2f2f7] font-sans text-slate-800 antialiased overflow-x-hidden">
                     <style>{`.no-scrollbar::-webkit-scrollbar { display: none !important; } .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }`}</style>
                     
                     {loading && (
                         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/80 backdrop-blur-md transition-all">
-                            <div className="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+                            <div className="w-12 h-12 border-4 border-slate-100 border-t-theme rounded-full animate-spin"></div>
                             <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">精算數據中...</p>
                         </div>
                     )}
 
                     {/* Header */}
-                    <header className="fixed top-0 z-[100] w-full bg-blue-600 px-6 pt-6 pb-8 shadow-2xl rounded-b-[48px]">
+                    <header className="fixed top-0 z-[100] w-full bg-theme px-6 pt-6 pb-8 shadow-2xl rounded-b-[48px] transition-colors duration-500">
                         <div className="flex justify-between items-center mb-5">
                             <button onClick={() => fetchData(true)} className="p-2 bg-white/15 rounded-2xl active:scale-90 transition-transform"><Icons.RefreshCw className="text-white" /></button>
                             <div className="text-center text-white"><p className="text-[10px] font-black opacity-30 uppercase tracking-widest">Wealth Growth Pro</p><p className="text-3xl font-black tabular-nums">${Math.round(netWorth).toLocaleString()}</p></div>
-                            <button onClick={() => { if(currentAccount==='全部帳戶')return showToast("請選擇帳戶"); setIsEditMode(false); setFormMode(currentCategory==='券商'?'買入':'存入'); setFormData({ symbol: '', quantity: '1', price: '', fee: 0, tax: 0, memo: '', dividendCash: '', dividendStock: '', toAccount: '', date: new Date().toISOString().split('T')[0] }); setIsModalOpen(true); }} className="p-2 bg-white rounded-2xl text-blue-600 shadow-xl active:scale-90"><Icons.Plus /></button>
+                            <button onClick={() => { if(currentAccount==='全部帳戶')return showToast("請選擇帳戶"); setIsEditMode(false); setFormMode(currentCategory==='券商'?'買入':'存入'); setFormData({ symbol: '', quantity: '1', price: '', fee: 0, tax: 0, memo: '', dividendCash: '', dividendStock: '', toAccount: '', date: new Date().toISOString().split('T')[0] }); setIsModalOpen(true); }} className="p-2 bg-white rounded-2xl text-theme shadow-xl active:scale-90 transition-colors duration-500"><Icons.Plus /></button>
                         </div>
                         <div className="px-8 mb-6">
                             <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
@@ -396,9 +487,9 @@
                             <div className="flex justify-between text-[8px] font-black text-white/40 uppercase mt-1.5 px-1"><span>現金 {Math.round(cashRatio)}%</span><span>持股 {Math.round(100-cashRatio)}%</span></div>
                         </div>
                         <div className="flex gap-3 overflow-x-auto no-scrollbar px-2 pb-1">
-                            <button onClick={() => { setCurrentAccount('全部帳戶'); setCurrentCategory('all'); }} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all whitespace-nowrap ${currentAccount==='全部帳戶'?'bg-white text-blue-600 shadow-lg scale-105':'bg-white/10 text-white/50'}`}>全部帳戶</button>
+                            <button onClick={() => { setCurrentAccount('全部帳戶'); setCurrentCategory('all'); }} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all whitespace-nowrap ${currentAccount==='全部帳戶'?'bg-white text-theme shadow-lg scale-105':'bg-white/10 text-white/50'}`}>全部帳戶</button>
                             {data.settings?.map((acc, i) => (
-                                <button key={i} onClick={() => { setCurrentAccount(acc.AccountName); setCurrentCategory(acc.Category); }} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all whitespace-nowrap ${currentAccount===acc.AccountName?'bg-white text-blue-600 shadow-lg scale-105':'bg-white/10 text-white/50'}`}>{acc.AccountName}</button>
+                                <button key={i} onClick={() => { setCurrentAccount(acc.AccountName); setCurrentCategory(acc.Category); }} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all whitespace-nowrap ${currentAccount===acc.AccountName?'bg-white text-theme shadow-lg scale-105':'bg-white/10 text-white/50'}`}>{acc.AccountName}</button>
                             ))}
                         </div>
                     </header>
@@ -418,7 +509,7 @@
                                     </div>
 
                                     <div className="border-t border-slate-100 pt-3">
-                                        <p className="text-[9px] text-blue-500 font-black uppercase mb-0.5">持倉浮動損益</p>
+                                        <p className="text-[9px] text-theme font-black uppercase mb-0.5 transition-colors duration-500">持倉浮動損益</p>
                                         <p className={`text-base font-black ${totalUnrealizedValue>=0?'text-red-500':'text-green-600'}`}>
                                             {totalUnrealizedValue>=0?'+':''}{Math.round(totalUnrealizedValue).toLocaleString()}
                                         </p>
@@ -448,8 +539,8 @@
                                 </section>
 
                                 <nav className="flex bg-slate-200/50 rounded-[28px] p-1.5 border border-white">
-                                    <button onClick={() => setActiveTab('portfolio')} className={`flex-1 py-3.5 text-xs font-black rounded-[22px] transition-all ${activeTab==='portfolio'?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>資產配置</button>
-                                    <button onClick={() => { setActiveTab('transactions'); fetchData(false); }} className={`flex-1 py-3.5 text-xs font-black rounded-[22px] transition-all ${activeTab==='transactions'?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>歷史明細</button>
+                                    <button onClick={() => setActiveTab('portfolio')} className={`flex-1 py-3.5 text-xs font-black rounded-[22px] transition-all ${activeTab==='portfolio'?'bg-white text-theme shadow-sm':'text-slate-400'}`}>資產配置</button>
+                                    <button onClick={() => { setActiveTab('transactions'); fetchData(false); }} className={`flex-1 py-3.5 text-xs font-black rounded-[22px] transition-all ${activeTab==='transactions'?'bg-white text-theme shadow-sm':'text-slate-400'}`}>歷史明細</button>
                                 </nav>
 
                                 {activeTab === 'portfolio' ? (
@@ -460,7 +551,7 @@
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                          <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase shrink-0">{h.symbol}</span>
+                                                          <span className="bg-theme text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase shrink-0 transition-colors duration-500">{h.symbol}</span>
                                                           <span className="text-slate-500 text-[10px] font-bold truncate">{h.name}</span>
                                                         </div>
                                                         <p className="text-2xl font-black text-slate-800 tracking-tighter">${h.price.toLocaleString()}</p>
@@ -470,16 +561,14 @@
                                                                 <span className="text-[10px] font-bold text-slate-600">${h.adjustedAvgCost.toFixed(2)}</span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-wider">股數 / 市值</span>
+                                                                <span className="text-[9px] font-black text-theme uppercase tracking-wider transition-colors duration-500">股數 / 市值</span>
                                                                 <span className="text-[10px] font-black text-slate-800">{h.qty.toLocaleString()} / ${Math.round(h.marketVal).toLocaleString()}</span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div className="text-right ml-4 shrink-0">
                                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總損益 (含息)</p>
-                                                        <p className={`text-lg font-black ${h.profit>=0?'text-red-500':'text-green-600'}`}>
-                                                            {h.profit>=0?'+':''}{Math.round(h.profit).toLocaleString()}
-                                                        </p>
+                                                        <p className={`text-lg font-black ${h.profit>=0?'text-red-500':'text-green-600'}`}>{h.profit>=0?'+':''}{Math.round(h.profit).toLocaleString()}</p>
                                                         <p className={`text-[10px] font-bold ${h.profit>=0?'text-red-400':'text-green-500'}`}>{h.roi.toFixed(1)}%</p>
                                                     </div>
                                                 </div>
@@ -515,7 +604,7 @@
                                             return (
                                                 <div key={i} className="glass-card p-5 flex justify-between items-center group relative fade-in">
                                                     <div className="flex items-center gap-4">
-                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${isEarning?'bg-orange-50 text-orange-400':(isOut?'bg-red-50 text-red-500':'bg-blue-50 text-blue-500')}`}>
+                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${isEarning?'bg-orange-50 text-orange-400':(isOut?'bg-red-50 text-red-500':'bg-theme-light text-theme transition-colors duration-500')}`}>
                                                             {isEarning ? <Icons.Plus size={20}/> : (isOut ? <Icons.TrendingDown size={20}/> : <Icons.TrendingUp size={20}/>)}
                                                         </div>
                                                         <div><p className="text-[9px] font-black text-slate-400 uppercase">{item.t[0].split(' ')[0]} • {item.t[6]}</p><p className="font-black text-slate-700 text-sm">{item.t[2]}</p></div>
@@ -525,7 +614,7 @@
                                                         <p className="text-[9px] font-black text-slate-400 uppercase">{item.t[1]}</p>
                                                     </div>
                                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center active:scale-90"><Icons.Edit3 size={12}/></button>
+                                                        <button onClick={()=>editTransaction(item.idx)} className="w-7 h-7 bg-theme-light text-theme rounded-full flex items-center justify-center active:scale-90 transition-all duration-500"><Icons.Edit3 size={12}/></button>
                                                         <button onClick={()=>deleteTransaction(item.idx)} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90"><Icons.Trash2 size={12}/></button>
                                                     </div>
                                                 </div>
@@ -545,7 +634,7 @@
                                         <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">個股總報酬排行 (全域)</h3>
                                         <div className="flex gap-2">
                                             <button onClick={() => setRankSort({ ...rankSort, by: rankSort.by === 'profit' ? 'roi' : 'profit'})} className={`text-[9px] font-black px-3 py-1.5 rounded-lg active:scale-95 transition-colors ${rankSort.by === 'profit' ? 'bg-slate-200 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>按{rankSort.by === 'profit' ? '金額' : '報酬率'}</button>
-                                            <button onClick={() => setRankSort({ ...rankSort, order: rankSort.order === 'desc' ? 'asc' : 'desc'})} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{rankSort.order === 'desc' ? '↓ 最大' : '↑ 最小'}</button>
+                                            <button onClick={() => setRankSort({ ...rankSort, order: rankSort.order === 'desc' ? 'asc' : 'desc'})} className="text-[9px] font-black bg-theme-light text-theme px-3 py-1.5 rounded-lg active:scale-95 transition-all duration-500">{rankSort.order === 'desc' ? '↓ 最大' : '↑ 最小'}</button>
                                         </div>
                                     </div>
                                     <div className="glass-card p-7 space-y-6">
@@ -560,7 +649,7 @@
                                 <section className="space-y-4">
                                     <div className="flex justify-between items-center px-2">
                                         <h3 className="font-black text-slate-500 uppercase tracking-widest text-[10px]">持股資產占比</h3>
-                                        <button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg active:scale-95">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button>
+                                        <button onClick={() => setStockSort(prev => prev === 'desc' ? 'asc' : 'desc')} className="text-[9px] font-black bg-theme-light text-theme px-3 py-1.5 rounded-lg active:scale-95 transition-all duration-500">{stockSort === 'desc' ? '↓ 大至小' : '↑ 小至大'}</button>
                                     </div>
                                     <div className="glass-card p-8 flex flex-col items-center">
                                         <div className="w-full mt-2 space-y-3">{globalStats.list.filter(h=>h.qty>0).sort((a,b) => stockSort === 'desc' ? b.marketVal - a.marketVal : a.marketVal - b.marketVal).map((h, i)=>(<div key={i} className="flex justify-between text-[11px] font-black text-slate-600 transition-all"><span>{h.symbol} {h.name}</span><span className="text-slate-800">${Math.round(h.marketVal).toLocaleString()} ({Math.round(h.marketVal/globalStats.marketValue*100)}%)</span></div>))}</div>
@@ -572,12 +661,45 @@
                         {activeTab === 'settings' && (
                             <div className="space-y-10 pb-20 fade-in">
                                 <h2 className="text-3xl font-black text-slate-800 px-2 tracking-tight">帳戶設定</h2>
+
+                                {/* 1. UI 色彩主題控制卡片 */}
                                 <section className="space-y-5">
-                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-blue-600 text-[10px] uppercase tracking-widest">證券券商系統</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新券商',Category:'券商',LinkedBank:'',DiscountRate:'100',MinFee:'20'},...data.settings]})} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all">+ 新增</button></div>
+                                    <div className="flex justify-between items-center px-2">
+                                        <h3 className="font-black text-theme text-[10px] uppercase tracking-widest transition-colors duration-500">系統主題配色</h3>
+                                    </div>
+                                    <div className="glass-card p-7 space-y-4">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {Object.keys(themes).map((key) => {
+                                                const t = themes[key];
+                                                const isActive = currentTheme === key;
+                                                return (
+                                                    <button 
+                                                        key={key}
+                                                        onClick={() => handleThemeChange(key)}
+                                                        className={`flex items-center gap-2.5 p-3.5 rounded-2xl border-2 text-xs font-black transition-all ${isActive ? 'border-theme bg-theme-light text-theme scale-102' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                                                    >
+                                                        <span 
+                                                            className="w-4 h-4 rounded-full border border-white/20 shrink-0" 
+                                                            style={{ 
+                                                                background: key === 'rotation' 
+                                                                    ? 'linear-gradient(45deg, #C93B2B, #E67E22, #D4AC0D, #27AE60, #2E4053, #1F3A60, #8E44AD)' 
+                                                                    : t.primary 
+                                                            }}
+                                                        />
+                                                        <span className="truncate">{t.name}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="space-y-5">
+                                    <div className="flex justify-between items-center px-2"><h3 className="font-black text-theme text-[10px] uppercase tracking-widest transition-colors duration-500">證券券商系統</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新券商',Category:'券商',LinkedBank:'',DiscountRate:'100',MinFee:'20'},...data.settings]})} className="bg-theme-light text-theme px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all duration-500">+ 新增</button></div>
                                     {data.settings?.filter(s=>s.Category==='券商').map((s,idx)=>(
                                         <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
                                             <button onClick={()=>setData({...data,settings:data.settings.filter(x=>x!==s)})} className="absolute top-7 right-7 text-slate-300 active:text-red-400"><Icons.Trash2 /></button>
-                                            <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-blue-600 border-b pb-1 w-full bg-transparent outline-none text-xl focus:border-blue-600" />
+                                            <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-theme border-b pb-1 w-full bg-transparent outline-none text-xl focus:border-theme transition-colors duration-500" />
                                             <div className="space-y-4">
                                                 <div className="bg-slate-100/50 p-4 rounded-2xl flex flex-col"><label className="text-[9px] font-black opacity-30 uppercase mb-1">交割連動銀行</label><select value={s.LinkedBank} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'LinkedBank',e.target.value)} className="bg-transparent text-sm font-bold w-full outline-none">{data.settings.filter(b=>b.Category==='銀行').map((b,i)=>(<option key={i} value={b.AccountName}>{b.AccountName}</option>))}<option value="">無</option></select></div>
                                                 <div className="grid grid-cols-2 gap-4">
@@ -598,67 +720,67 @@
                                         </div>
                                     ))}
                                 </section>
-                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all"><Icons.Save />儲存並同步到雲端</button></div>
+                                <div className="px-2"><button onClick={saveAllSettings} className="w-full bg-theme text-white py-6 rounded-[32px] font-black shadow-2xl flex items-center justify-center gap-3 text-lg active:scale-95 transition-all duration-500"><Icons.Save />儲存並同步到雲端</button></div>
                             </div>
                         )}
                     </main>
 
                     <footer className="fixed bottom-0 w-full bg-white/80 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-[110]" style={{paddingBottom:'calc(15px + env(safe-area-inset-bottom))'}}>
-                        <button onClick={()=>setActiveTab('portfolio')} className={`flex flex-col items-center ${activeTab==='portfolio'?'text-blue-600':'text-slate-300'}`}><Icons.PieChart size={24} /><span className="text-[10px] font-black mt-1">資產</span></button>
-                        <button onClick={()=>setActiveTab('analysis')} className={`flex flex-col items-center ${activeTab==='analysis'?'text-blue-600':'text-slate-300'}`}><Icons.History size={24} /><span className="text-[10px] font-black mt-1">分析</span></button>
-                        <button onClick={()=>setActiveTab('settings')} className={`flex flex-col items-center ${activeTab==='settings'?'text-blue-600':'text-slate-300'}`}><Icons.Settings size={24} /><span className="text-[10px] font-black mt-1">設定</span></button>
+                        <button onClick={()=>setActiveTab('portfolio')} className={`flex flex-col items-center ${activeTab==='portfolio'?'text-theme':'text-slate-300'} transition-colors duration-500`}><Icons.PieChart size={24} /><span className="text-[10px] font-black mt-1">資產</span></button>
+                        <button onClick={()=>setActiveTab('analysis')} className={`flex flex-col items-center ${activeTab==='analysis'?'text-theme':'text-slate-300'} transition-colors duration-500`}><Icons.History size={24} /><span className="text-[10px] font-black mt-1">分析</span></button>
+                        <button onClick={()=>setActiveTab('settings')} className={`flex flex-col items-center ${activeTab==='settings'?'text-theme':'text-slate-300'} transition-colors duration-500`}><Icons.Settings size={24} /><span className="text-[10px] font-black mt-1">設定</span></button>
                     </footer>
 
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-end justify-center p-4">
                             <div className="bg-white w-full max-w-md rounded-[48px] p-10 shadow-2xl modal-animate overflow-y-auto no-scrollbar max-h-[90vh]">
                                 <div className="w-14 h-1.5 bg-slate-100 rounded-full mx-auto mb-10" />
-                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-blue-600 mt-1 uppercase tracking-widest">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X size={20}/></button></div>
+                                <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-theme mt-1 uppercase tracking-widest transition-colors duration-500">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X /></button></div>
                                 <div className="space-y-7">
                                     <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px]">
-                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>
+                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-theme':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>
                                         <button onClick={()=>setFormMode(currentCategory==='券商'?'賣出':'提領')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['賣出','提領'].includes(formMode)?'bg-white shadow-sm text-red-500':'text-slate-400'}`}>{currentCategory==='券商'?'賣出':'提領'}</button>
-                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'除權息':'轉帳')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['除權息','轉帳'].includes(formMode)?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>{currentCategory==='券商'?'除權息':'轉帳'}</button>
+                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'除權息':'轉帳')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['除權息','轉帳'].includes(formMode)?'bg-white shadow-sm text-theme':'text-slate-400'}`}>{currentCategory==='券商'?'除權息':'轉帳'}</button>
                                     </div>
                                     <div className="space-y-5">
                                         {formMode === '轉帳' ? (
                                             <>
-                                                <select value={formData.toAccount} onChange={e=>setFormData({...formData,toAccount:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black border-2 border-transparent focus:border-blue-500 outline-none"><option value="">選擇目標銀行</option>{data.settings.filter(acc => acc.Category === '銀行' && acc.AccountName !== currentAccount).map((acc, i) => (<option key={i} value={acc.AccountName}>{acc.AccountName}</option>))}</select>
-                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="轉帳金額" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-blue-500 outline-none" />
+                                                <select value={formData.toAccount} onChange={e=>setFormData({...formData,toAccount:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black border-2 border-transparent focus:border-theme outline-none transition-colors duration-500"><option value="">選擇目標銀行</option>{data.settings.filter(acc => acc.Category === '銀行' && acc.AccountName !== currentAccount).map((acc, i) => (<option key={i} value={acc.AccountName}>{acc.AccountName}</option>))}</select>
+                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="轉帳金額" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-theme outline-none transition-colors duration-500" />
                                             </>
                                         ) : formMode === '除權息' ? (
                                             <>
-                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-all duration-500" />
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-blue-600">除息金額 ($)</label><input type="number" value={formData.dividendCash} onChange={e=>setFormData({...formData,dividendCash:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
-                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (股)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-theme transition-colors duration-500">除息金額 ($)</label><input type="number" value={formData.dividendCash} onChange={e=>setFormData({...formData,dividendCash:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (股)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
                                                 </div>
                                             </>
                                         ) : (
                                             <>
-                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500" />
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-colors duration-500" />
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">數量</label><input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-transparent font-black outline-none" /></div>
-                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">單價/總額</label><input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="金額" className="w-full bg-transparent font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">數量</label><input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-transparent font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">單價/總額</label><input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="金額" className="w-full bg-transparent font-black outline-none" /></div>
                                                 </div>
                                                 {currentCategory === '券商' && (
                                                     <>
                                                         <div className="grid grid-cols-2 gap-4">
-                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">手續費</label><input type="number" value={formData.fee} onChange={e=>setFormData({...formData,fee:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
-                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-blue-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">交易稅</label><input type="number" value={formData.tax} onChange={e=>setFormData({...formData,tax:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">手續費</label><input type="number" value={formData.fee} onChange={e=>setFormData({...formData,fee:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                            <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">交易稅</label><input type="number" value={formData.tax} onChange={e=>setFormData({...formData,tax:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>
                                                         </div>
-                                                        <div className="bg-blue-50 p-6 rounded-[32px] text-center border border-blue-100">
-                                                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">預估交割金額</p>
-                                                            <p className="text-3xl font-black text-blue-600 tracking-tighter">${Math.round(settlementDisplay).toLocaleString()}</p>
+                                                        <div className="bg-theme-light p-6 rounded-[32px] text-center border border-theme-border transition-all duration-500">
+                                                            <p className="text-[10px] font-black text-theme uppercase tracking-widest mb-1 transition-colors duration-500">預估交割金額</p>
+                                                            <p className="text-3xl font-black text-theme tracking-tighter transition-colors duration-500">${Math.round(settlementDisplay).toLocaleString()}</p>
                                                         </div>
                                                     </>
                                                 )}
                                             </>
                                         )}
-                                        <input type="text" value={formData.memo} onChange={e=>setFormData({...formData,memo:e.target.value})} placeholder="備註 (選填)" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" />
+                                        <input type="text" value={formData.memo} onChange={e=>setFormData({...formData,memo:e.target.value})} placeholder="備註 (選填)" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-all duration-500" />
                                         <input type="date" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none" />
                                     </div>
-                                    <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black shadow-2xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">{loading ? <Icons.RefreshCw className="animate-spin" /> : submitStatus}</button>
+                                    <button onClick={handleSubmit} disabled={loading} className="w-full bg-theme text-white py-6 rounded-[32px] font-black shadow-2xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all duration-500">{loading ? <Icons.RefreshCw className="animate-spin" /> : submitStatus}</button>
                                 </div>
                             </div>
                         </div>

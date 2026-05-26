@@ -3,19 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>財富成長 Pro v3.1.6</title>
+    <title>財富成長 Pro v3.1.8</title>
     <!-- 
-      版本: v3.1.6 Pro (Chart Rendering & Background Sync Fix)
+      版本: v3.1.8 Pro (Accounting Engine & Dividend Fix Master)
       更新內容:
-      1. 修復圓餅圖崩潰：修正 chartReady 初始化狀態為 true，確保 Chart.js 能立即啟動渲染排程。
-      2. 背景無感同步：新增獨立的掛載 useEffect 執行 fetchData(false)，確保進入頁面時於背景自動同步雲端資料，提供即時帳目狀態且不干擾操作體驗。
-      3. 導入 computedStyle：動態擷取真實色碼解決 Chart.js 無法解析 CSS 變數的問題。
-      4. 新增晴空鮮藍：將「暮光黛藍」更替為「晴空鮮藍 #0086CC」，完善主題設定。
+      1. 損益計算引擎重構：導入「剩餘持有成本 (Remaining Cost)」追蹤法，徹底修復「股票股利 (配股)」無法正確轉化為未實現損益的問題。
+      2. 還原均價除錯：重構還原均價公式為 (剩餘持有成本 - 累積股利) / 剩餘股數，解決多次分批賣出造成的計算失真。
+      3. 現金股利安全網：強化「股息/利息」的容錯判定，確保所有配息均100%納入「總損益」與「已實現損益」。
+      4. 歷史明細強化：交易列表右側金額維持顯示「實際交割總額（含手續費與稅）」，並在標的旁顯示「(股數 @ $單價)」。
       5. 區間查詢選項：維持「全部期間、本月、本季、本年、自定區間」並完美連動所有圖表與卡片。
-      6. 雙軌損益獨立呈現：拆分「持倉浮動損益（未實現）」與「已實現損益（已賣價差+累積股利+借券利息）」。
-      7. 極簡資訊控制台：首頁資產卡片升級為三行精巧版面，整齊並列呈現頂級 Apple Design 質感。
-      8. 數量預設值與手續精算：維持數量預設為 "1"；自動依據券商設定計算手續費；依標的屬性自動帶入交易稅。
-      9. 旗艦邏輯繼承：維持名稱連動、智慧現金加總與中日時間解析引擎，以及避免 Babel 崩潰的寫法。
+      6. 旗艦邏輯繼承：維持名稱連動、智慧現金加總、動態computedStyle色彩引擎、數量預填為 1 及自動手續費精算等定案功能。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -105,7 +102,7 @@
             return isNaN(d.getTime()) ? new Date() : d;
         };
 
-        // --- [數據計算引擎 - 支援五大查詢區間過濾] ---
+        // --- [數據計算引擎 - v3.1.8 導入剩餘成本 (Remaining Cost) 追蹤法精確修正損益] ---
         const calculateStatsCore = (dataCache, targetAcc, dateRange) => {
             if (!dataCache || !dataCache.transactions || dataCache.transactions.length === 0) {
                 return { list: [], marketValue: 0, totalProfit: 0, totalRealized: 0, totalUnrealized: 0, startDate: new Date() };
@@ -123,30 +120,34 @@
                 if (isBank) {
                     const linkedBrokers = sets.filter(s => s.Category === '券商' && s.LinkedBank === targetAcc).map(s => s.AccountName);
                     relevantAccounts = [...relevantAccounts, ...linkedBrokers];
+                } else {
+                    // 券商帳戶：自動納入其關聯的交割銀行，確保該券商持股的現金股利（通常記錄在銀行下）能正確計入
+                    const brokerSetting = sets.find(s => s.AccountName === targetAcc && s.Category === '券商');
+                    if (brokerSetting && brokerSetting.LinkedBank) {
+                        relevantAccounts = [...relevantAccounts, brokerSetting.LinkedBank];
+                    }
                 }
             }
 
-            // A. 初步按帳戶過濾交易
             let txList = targetAcc === '全部帳戶' ? dataCache.transactions : dataCache.transactions.filter(t => relevantAccounts.includes(t[6]));
 
-            // B. 依據設定頁面的「五大區間查詢條件」進行二次過濾
             if (dateRange && dateRange.type !== 'all') {
                 const now = new Date();
                 let startLimit = null;
                 let endLimit = null;
 
                 if (dateRange.type === 'thisMonth') {
-                    startLimit = new Date(now.getFullYear(), now.getMonth(), 1); // 本月第一天
+                    startLimit = new Date(now.getFullYear(), now.getMonth(), 1); 
                 } else if (dateRange.type === 'thisQuarter') {
                     const quarter = Math.floor(now.getMonth() / 3);
-                    startLimit = new Date(now.getFullYear(), quarter * 3, 1); // 本季第一個月的第一天
+                    startLimit = new Date(now.getFullYear(), quarter * 3, 1); 
                 } else if (dateRange.type === 'thisYear') {
-                    startLimit = new Date(now.getFullYear(), 0, 1); // 本年第一天
+                    startLimit = new Date(now.getFullYear(), 0, 1); 
                 } else if (dateRange.type === 'custom') {
                     if (dateRange.start) startLimit = new Date(dateRange.start);
                     if (dateRange.end) {
                         endLimit = new Date(dateRange.end);
-                        endLimit.setHours(23, 59, 59, 999); // 包含結束日當天
+                        endLimit.setHours(23, 59, 59, 999); 
                     }
                 }
 
@@ -164,35 +165,96 @@
                 startDate = new Date(Math.min(...dates));
             }
 
+            // 建立股票代號的快速檢索集，用來精準識別與過濾出真正的股票相關交易
+            const stockSymbols = new Set(
+                txList.filter(t => t[1] === '買入' || t[1] === '賣出').map(t => String(t[2] || "").trim())
+            );
+            const allStockSymbols = new Set(
+                dataCache.transactions.filter(t => t[1] === '買入' || t[1] === '賣出').map(t => String(t[2] || "").trim())
+            );
+
             const holdings = {};
             txList.forEach(t => {
                 const type = t[1], symbol = String(t[2] || "").trim();
                 const qty = parseNum(t[3]), price = parseNum(t[4]), fee = parseNum(t[5]), tax = parseNum(t[7]);
                 const isEarnings = symbol.startsWith('股息:') || symbol.startsWith('利息:');
                 const cleanSym = symbol.replace(/^(股息:|利息:)/, '');
-                if (!cleanSym || ['現金','利息','存入','提領','轉帳'].includes(cleanSym) || cleanSym.includes('交割:')) return;
-                if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                
+                // 檢查此符號是否屬於股票
+                const isCurrentStock = stockSymbols.has(cleanSym);
+                const isAnyStock = allStockSymbols.has(cleanSym) || priceMap[cleanSym] !== undefined;
+
                 if (type === '買入') {
-                    holdings[cleanSym].qty += qty; holdings[cleanSym].buyQty += qty; holdings[cleanSym].totalBuyCost += (qty * price + fee + tax);
+                    if (!isCurrentStock) return;
+                    if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                    const cost = (qty * price + fee + tax);
+                    holdings[cleanSym].qty += qty; 
+                    holdings[cleanSym].buyQty += qty; 
+                    holdings[cleanSym].totalBuyCost += cost;
+                    holdings[cleanSym].remainingCost += cost;
                 } else if (type === '賣出') {
-                    const avgCost = holdings[cleanSym].buyQty > 0 ? (holdings[cleanSym].totalBuyCost / holdings[cleanSym].buyQty) : 0;
-                    holdings[cleanSym].realized += ((qty * price - fee - tax) - (qty * avgCost));
+                    if (!isCurrentStock) return;
+                    if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                    const unitCost = holdings[cleanSym].qty > 0 ? holdings[cleanSym].remainingCost / holdings[cleanSym].qty : 0;
+                    const costOfSale = qty * unitCost;
+                    holdings[cleanSym].realized += ((qty * price - fee - tax) - costOfSale);
                     holdings[cleanSym].qty -= qty;
+                    holdings[cleanSym].remainingCost -= costOfSale;
                 } else if (type === '除權息') {
-                    if (isEarnings) holdings[cleanSym].dividendIncome += price;
-                    else { holdings[cleanSym].qty += qty; holdings[cleanSym].dividendIncome += price; }
+                    if (isEarnings) {
+                        // 只計算真正的股票現金股利 (排除非股票的利息與其他配息)
+                        if (isAnyStock && isCurrentStock) {
+                            if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                            holdings[cleanSym].dividendIncome += price;
+                        }
+                    } else {
+                        // 股票股利 (配股)
+                        if (!isCurrentStock) return;
+                        if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                        holdings[cleanSym].qty += qty; 
+                        holdings[cleanSym].dividendIncome += price; // 容錯處理
+                    }
                 } else if (type === '收益') {
-                    holdings[cleanSym].dividendIncome += price;
+                    // 只把屬於當前持股的收益計入股票的股利
+                    if (isAnyStock && isCurrentStock) {
+                        if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                        holdings[cleanSym].dividendIncome += price;
+                    }
+                } else if (type === '存入' && isEarnings) {
+                    // 容錯處理以 "存入" 且以 "股息:XXXX" 記錄的配息交易
+                    if (isAnyStock && isCurrentStock) {
+                        if (!holdings[cleanSym]) holdings[cleanSym] = { qty: 0, totalBuyCost: 0, remainingCost: 0, buyQty: 0, realized: 0, dividendIncome: 0 };
+                        holdings[cleanSym].dividendIncome += price;
+                    }
                 }
             });
 
             const list = Object.keys(holdings).map(sym => {
-                const h = holdings[sym], curP = priceMap[sym] || 0, avgC = h.buyQty > 0 ? h.totalBuyCost / h.buyQty : 0;
-                const unrealizedGain = h.qty * (curP - avgC);
+                const h = holdings[sym], curP = priceMap[sym] || 0;
+                
+                // 未實現損益 = 當前市值 - 剩餘持有成本
+                const unrealizedGain = (h.qty * curP) - h.remainingCost;
+                
+                // 總損益 = 已實現 + 未實現 + 股利與利息 (只含該股票之配股/配息)
                 const totalProfit = h.realized + unrealizedGain + h.dividendIncome;
+                
                 const roi = h.totalBuyCost > 0 ? (totalProfit / h.totalBuyCost) * 100 : 0;
-                const adjustedAvgCost = h.qty > 0 ? (h.totalBuyCost - h.dividendIncome - h.realized) / h.qty : 0;
-                return { symbol: sym, name: nameMap[sym] || "", qty: h.qty, price: curP, profit: totalProfit, roi, marketVal: h.qty * curP, adjustedAvgCost, unrealized: unrealizedGain, realized: h.realized + h.dividendIncome };
+                
+                // 還原均價 = (剩餘成本 - 已領股利) / 剩餘股數，徹底解決多次賣出造成的失真
+                const adjustedAvgCost = h.qty > 0 ? (h.remainingCost - h.dividendIncome) / h.qty : 0;
+                
+                return { 
+                    symbol: sym, 
+                    name: nameMap[sym] || "", 
+                    qty: h.qty, 
+                    price: curP, 
+                    profit: totalProfit, 
+                    roi, 
+                    marketVal: h.qty * curP, 
+                    adjustedAvgCost, 
+                    unrealized: unrealizedGain, 
+                    realized: h.realized + h.dividendIncome 
+                };
             });
 
             const totalRealized = list.reduce((sum, item) => sum + item.realized, 0);
@@ -214,8 +276,6 @@
                 return cache ? JSON.parse(cache) : { summary: {}, transactions: [], settings: [], inventory: [], accountBalances: {} };
             });
             const [loading, setLoading] = useState(false);
-            
-            // --- [修復圖表渲染：chartReady 初始為 true] ---
             const [chartReady, setChartReady] = useState(true); 
             
             const [activeTab, setActiveTab] = useState('portfolio');
@@ -241,12 +301,10 @@
 
             const chartRefs = useRef({ allocation: null, trend: null, stock: null, bank: null });
 
-            // --- [設定色彩主題控制狀態庫] ---
             const [currentTheme, setCurrentTheme] = useState(() => {
                 return localStorage.getItem('ledger_theme_v309') || 'skyblue';
             });
 
-            // --- [設定全域統計區間過濾狀態庫 - 五大精確區間] ---
             const [dateRange, setDateRange] = useState(() => {
                 const saved = localStorage.getItem('ledger_daterange_v314');
                 return saved ? JSON.parse(saved) : { type: 'all', start: '', end: '' };
@@ -273,7 +331,6 @@
                 localStorage.setItem('ledger_daterange_v314', JSON.stringify(newRange));
             };
 
-            // 將原本暮光黛藍替換為「晴空鮮藍 #0086CC」
             const themes = {
                 crimson: { name: '初陽絳紅', primary: '#C93B2B', hover: '#A82E21', light: 'rgba(201, 59, 43, 0.12)', ultralight: 'rgba(201, 59, 43, 0.05)', border: 'rgba(201, 59, 43, 0.2)' },
                 amber: { name: '晚霞琥橙', primary: '#E67E22', hover: '#CA6F1E', light: 'rgba(230, 126, 34, 0.12)', ultralight: 'rgba(230, 126, 34, 0.05)', border: 'rgba(230, 126, 34, 0.2)' },
@@ -309,9 +366,8 @@
                 showToast(`已套用配色主題：${themes[key].name}`);
             };
 
-            // --- [修復無感同步：背景自動 fetchData] ---
             useEffect(() => { 
-                fetchData(false); // 掛載時執行背景同步
+                fetchData(false); 
             }, []);
 
             const fetchData = async (full = false) => {
@@ -326,7 +382,6 @@
                 } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
             };
 
-            // --- [精密計算全域綁定過濾器] ---
             const stats = useMemo(() => calculateStatsCore(data, currentAccount, dateRange), [data, currentAccount, dateRange]);
             const globalStats = useMemo(() => calculateStatsCore(data, '全部帳戶', dateRange), [data, dateRange]);
             
@@ -353,6 +408,15 @@
             const principal = netWorth - totalProfitValue;
             const roiPercent = principal > 0 ? (totalProfitValue / principal) * 100 : 0;
             const cashRatio = netWorth > 0 ? (cashVal / netWorth) * 100 : 0;
+
+            const cashAccountName = useMemo(() => {
+                if (currentAccount === '全部帳戶') return '總可用現金';
+                const activeS = (data.settings || []).find(x => x.AccountName === currentAccount);
+                if (activeS?.Category === '券商' && activeS.LinkedBank) {
+                    return activeS.LinkedBank;
+                }
+                return currentAccount;
+            }, [data.settings, currentAccount]);
 
             const annualizedReturnStr = useMemo(() => {
                 if (!stats.startDate || principal <= 0 || isNaN(stats.startDate.getTime())) return "--%";
@@ -398,7 +462,6 @@
                 }
             }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, currentCategory, data.settings]);
 
-            // 圖表渲染 (修復圓餅圖支援 CSS 變數)
             useEffect(() => {
                 if (!chartReady) return;
                 const renderCharts = () => {
@@ -430,7 +493,6 @@
                             chartRefs.current.trend?.destroy();
                             let txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => safeParseDate(a[0]).getTime() - safeParseDate(b[0]).getTime());
                             
-                            // 趨勢圖也同步受日期區間過濾連動
                             if (dateRange && dateRange.type !== 'all') {
                                 const now = new Date(); let sL = null; let eL = null;
                                 if (dateRange.type === 'thisMonth') sL = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -452,7 +514,6 @@
                     }
                 };
                 
-                // 確保 CSS 變數在 DOM 渲染完畢後被正確解析
                 const timerId = setTimeout(renderCharts, 10);
                 return () => {
                     clearTimeout(timerId);
@@ -582,7 +643,7 @@
                                 </section>
 
                                 <section className="bg-slate-900 rounded-[40px] p-9 text-white shadow-2xl relative overflow-hidden">
-                                    <div className="relative z-10"><p className="text-xs font-bold text-white/40 mb-1 uppercase tracking-widest">{currentAccount==='全部帳戶'?'總可用現金':`${currentAccount} 餘額`}</p><p className="text-4xl font-black tracking-tighter tabular-nums">${Math.round(cashVal).toLocaleString()}</p></div>
+                                    <div className="relative z-10"><p className="text-xs font-bold text-white/40 mb-1 uppercase tracking-widest">{currentAccount==='全部帳戶'?'總可用現金':`${cashAccountName} 餘額`}</p><p className="text-4xl font-black tracking-tighter tabular-nums">${Math.round(cashVal).toLocaleString()}</p></div>
                                     <Icons.Landmark size={100} className="text-white/5 absolute -right-4 -bottom-4 rotate-12" />
                                 </section>
 
@@ -650,16 +711,45 @@
                                         }).slice().reverse().map((item, i) => {
                                             const isOut = item.t[1].match(/買|提/);
                                             const isEarning = item.t[1].match(/除|收|利/);
+                                            
+                                            // --- [歷史明細強化：顯示股數與精算交割金額] ---
+                                            const tType = item.t[1];
+                                            const tQty = parseNum(item.t[3]);
+                                            const tPrice = parseNum(item.t[4]);
+                                            const tFee = parseNum(item.t[5]);
+                                            const tTax = parseNum(item.t[7]);
+                                            
+                                            let displayAmt = tPrice;
+                                            let subText = "";
+                                            
+                                            if (tType === '買入' || tType === '賣出') {
+                                                displayAmt = tType === '買入' ? (tQty * tPrice) + tFee + tTax : (tQty * tPrice) - tFee - tTax;
+                                                subText = `${tQty.toLocaleString()}股 @ $${tPrice.toLocaleString()}`;
+                                            } else if (tType === '除權息') {
+                                                displayAmt = tPrice;
+                                                if (tQty > 0 && !item.t[2].startsWith('股息:')) {
+                                                    subText = `配股 ${tQty.toLocaleString()}股`;
+                                                }
+                                            } else {
+                                                displayAmt = tQty * tPrice; 
+                                            }
+
                                             return (
                                                 <div key={i} className="glass-card p-5 flex justify-between items-center group relative fade-in">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${isEarning?'bg-orange-50 text-orange-400':(isOut?'bg-red-50 text-red-500':'bg-theme-light text-theme transition-colors duration-500')}`}>
                                                             {isEarning ? <Icons.Plus size={20}/> : (isOut ? <Icons.TrendingDown size={20}/> : <Icons.TrendingUp size={20}/>)}
                                                         </div>
-                                                        <div><p className="text-[9px] font-black text-slate-400 uppercase">{item.t[0].split(' ')[0]} • {item.t[6]}</p><p className="font-black text-slate-700 text-sm">{item.t[2]}</p></div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase">{item.t[0].split(' ')[0]} • {item.t[6]}</p>
+                                                            <div className="flex items-baseline gap-1.5">
+                                                                <p className="font-black text-slate-700 text-sm">{item.t[2]}</p>
+                                                                {subText && <span className="text-[10px] font-bold text-slate-400">({subText})</span>}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <div className="text-right pr-10">
-                                                        <p className={`font-black tabular-nums ${isEarning?'text-orange-400':(isOut?'text-red-500':'text-slate-800')}`}>{isOut?'-':'+'}{parseNum(item.t[4]).toLocaleString()}</p>
+                                                        <p className={`font-black tabular-nums ${isEarning?'text-orange-400':(isOut?'text-red-500':'text-slate-800')}`}>{isOut?'-':'+'}{Math.round(displayAmt).toLocaleString()}</p>
                                                         <p className="text-[9px] font-black text-slate-400 uppercase">{item.t[1]}</p>
                                                     </div>
                                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

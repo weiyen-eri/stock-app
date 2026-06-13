@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>財富成長 Pro v3.3.1</title>
+    <title>財富成長 Pro v3.5.0</title>
     <!-- 
-      版本: v3.3.1 Pro (Taiwan Stock Market Color Scheme)
+      版本: v3.5.0 Pro (Gold & Forex Integration Master)
       更新內容:
-      1. 台股專屬配色：將分析頁面趨勢圖的柱狀圖、變化數字、與動態徽章，全部調整為「正成長紅、負成長綠」(紅漲綠跌)。
-      2. 趨勢圖表大升級：實作「日/月/年」時間維度切換器。
-      3. 雙圖表聯動分析：將趨勢圖拆分為上半部「累積趨勢漸層折線圖」與下半部「當期變化柱狀圖」。
-      4. 核心邏輯完美繼承：維持 v3.2.0 所有旗艦定案功能（帳戶自訂排序、配股配息精算、雙軌損益對比、五大區間查詢、主題色彩系統、自動手續費等）。
+      1. 黃金外匯整合：解鎖銀行帳戶的「買入/賣出」資產功能。銀行新增選單加入水平滑動設計，新增「買黃金/外幣」與「賣黃金/外幣」選項。
+      2. 通用資產單位：將 UI 中硬編碼的「股數」字眼泛化為「數量 / 總市值」與「單位」，完美相容黃金的「克」與外匯。
+      3. 動態交割面板：銀行帳戶買賣資產時，智慧展開「交割金額預估」面板，買入金額自動自銀行現金餘額扣除。
+      4. 核心邏輯完美繼承：維持所有旗艦定案功能（帳戶自訂排序、配股配息精算、雙軌損益對比、五大區間查詢、主題色彩系統、自動手續費等）。
     -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -18,7 +18,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- 註冊動態色彩主題設定至 Tailwind 引擎中 -->
     <script>
         tailwind.config = {
             theme: {
@@ -66,7 +65,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- [圖示組件庫] ---
         const Icons = {
             RefreshCw: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>,
             Plus: ({ className }) => <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
@@ -74,13 +72,13 @@
             History: ({ className, size = 24 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
             Settings: ({ className, size = 24 }) => (
                 <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0-2.73-.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                     <circle cx="12" cy="12" r="3"/>
                 </svg>
             ),
             Search: ({ className }) => <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-            TrendingUp: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>,
-            TrendingDown: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
+            TrendingUp: ({ className, size = 20 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="7 7 17 7 17 17"/></svg>,
+            TrendingDown: ({ className, size = 20 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
             Trash2: ({ className, size = 16 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
             Edit3: ({ className, size = 16 }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
             Save: ({ className }) => <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
@@ -334,7 +332,7 @@
                 amber: { name: '晚霞琥橙', primary: '#E67E22', hover: '#CA6F1E', light: 'rgba(230, 126, 34, 0.12)', ultralight: 'rgba(230, 126, 34, 0.05)', border: 'rgba(230, 126, 34, 0.2)' },
                 gold: { name: '煦風藤黃', primary: '#D4AC0D', hover: '#B7950B', light: 'rgba(212, 172, 13, 0.12)', ultralight: 'rgba(212, 172, 13, 0.05)', border: 'rgba(212, 172, 13, 0.2)' },
                 bamboo: { name: '空山竹綠', primary: '#27AE60', hover: '#1E8449', light: 'rgba(39, 174, 96, 0.12)', ultralight: 'rgba(39, 174, 96, 0.05)', border: 'rgba(39, 174, 96, 0.2)' },
-                skyblue: { name: '晴空鮮藍', primary: '#6C9BD2', hover: '#006BA3', light: 'rgba(0, 134, 204, 0.12)', ultralight: 'rgba(0, 134, 204, 0.05)', border: 'rgba(0, 134, 204, 0.2)' },
+                skyblue: { name: '晴空鮮藍', primary: '#0086CC', hover: '#006BA3', light: 'rgba(0, 134, 204, 0.12)', ultralight: 'rgba(0, 134, 204, 0.05)', border: 'rgba(0, 134, 204, 0.2)' },
                 indigo: { name: '星河深靛', primary: '#1F3A60', hover: '#152A47', light: 'rgba(31, 58, 96, 0.12)', ultralight: 'rgba(31, 58, 96, 0.05)', border: 'rgba(31, 58, 96, 0.2)' },
                 purple: { name: '浮雲縹紫', primary: '#8E44AD', hover: '#732D91', light: 'rgba(142, 68, 173, 0.12)', ultralight: 'rgba(142, 68, 173, 0.05)', border: 'rgba(142, 68, 173, 0.2)' },
                 rotation: { name: '自動輪流' }
@@ -380,14 +378,28 @@
                 } catch (e) { showToast("連線同步失敗"); } finally { setLoading(false); }
             };
 
-            const moveSetting = (index, direction) => {
-                if (index < 0 || index >= (data.settings?.length || 0)) return;
+            const moveSetting = (s, direction) => {
+                const index = data.settings.indexOf(s);
+                if (index === -1) return;
                 const newSettings = [...data.settings];
-                if (direction === -1 && index > 0) {
-                    [newSettings[index - 1], newSettings[index]] = [newSettings[index], newSettings[index - 1]];
-                    setData({ ...data, settings: newSettings });
-                } else if (direction === 1 && index < newSettings.length - 1) {
-                    [newSettings[index + 1], newSettings[index]] = [newSettings[index], newSettings[index + 1]];
+                let targetIndex = -1;
+                if (direction === -1) {
+                    for (let i = index - 1; i >= 0; i--) {
+                        if (newSettings[i].Category === s.Category) {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+                } else if (direction === 1) {
+                    for (let i = index + 1; i < newSettings.length; i++) {
+                        if (newSettings[i].Category === s.Category) {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+                }
+                if (targetIndex !== -1) {
+                    [newSettings[index], newSettings[targetIndex]] = [newSettings[targetIndex], newSettings[index]];
                     setData({ ...data, settings: newSettings });
                 }
             };
@@ -463,7 +475,6 @@
                 }
             }, [formData.quantity, formData.price, formData.symbol, formMode, currentAccount, currentCategory, data.settings]);
 
-            // --- [圖表資料聚合計算法：依據日/月/年統計] ---
             const trendData = useMemo(() => {
                 let txs = [...data.transactions].filter(x => x && x[0]).sort((a,b) => safeParseDate(a[0]).getTime() - safeParseDate(b[0]).getTime());
                 
@@ -511,12 +522,12 @@
                 return { labels, vals, deltas, lastCum, lastDelta };
             }, [data.transactions, dateRange, trendPeriod]);
 
-            // 圖表渲染邏輯
             useEffect(() => {
                 if (!chartReady) return;
                 const renderCharts = () => {
                     const rootStyle = window.getComputedStyle(document.documentElement);
                     const themeColor = rootStyle.getPropertyValue('--theme-primary').trim() || '#0086CC';
+                    const lightThemeColor = rootStyle.getPropertyValue('--theme-ultralight').trim() || 'rgba(0, 134, 204, 0.05)';
 
                     const aCtx = document.getElementById('allocation-canvas')?.getContext('2d');
                     if (aCtx) {
@@ -579,7 +590,6 @@
                                 }
                             });
 
-                            // --- [修復關鍵：台灣股市配色 (正數紅 / 負數綠)] ---
                             chartRefs.current.trendBar = new Chart(barCtx, {
                                 type: 'bar',
                                 data: {
@@ -761,7 +771,7 @@
                                                                 <span className="text-[10px] font-bold text-slate-600">${h.adjustedAvgCost.toFixed(2)}</span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="text-[9px] font-black text-theme uppercase tracking-wider transition-colors duration-500">股數 / 市值</span>
+                                                                <span className="text-[9px] font-black text-theme uppercase tracking-wider transition-colors duration-500">{(String(h.symbol || '').includes('黃金') || String(h.name || '').includes('黃金')) ? '克數 / 市值' : '股數 / 市值'}</span>
                                                                 <span className="text-[10px] font-black text-slate-800">{h.qty.toLocaleString()} / ${Math.round(h.marketVal).toLocaleString()}</span>
                                                             </div>
                                                         </div>
@@ -813,13 +823,14 @@
                                             let displayAmt = tPrice;
                                             let subText = "";
                                             
+                                            const unit = String(item.t[2] || '').includes('黃金') ? '克' : '單位';
                                             if (tType === '買入' || tType === '賣出') {
                                                 displayAmt = tType === '買入' ? (tQty * tPrice) + tFee + tTax : (tQty * tPrice) - tFee - tTax;
-                                                subText = `${tQty.toLocaleString()}股 @ $${tPrice.toLocaleString()}`;
+                                                subText = `${tQty.toLocaleString()}${unit} @ $${tPrice.toLocaleString()}`;
                                             } else if (tType === '除權息') {
                                                 displayAmt = tPrice;
                                                 if (tQty > 0 && !item.t[2].startsWith('股息:')) {
-                                                    subText = `配股 ${tQty.toLocaleString()}股`;
+                                                    subText = `配發 ${tQty.toLocaleString()}${unit}`;
                                                 }
                                             } else {
                                                 displayAmt = tQty * tPrice; 
@@ -859,7 +870,6 @@
                             <div className="space-y-10 pb-20 fade-in">
                                 <h2 className="text-3xl font-black text-slate-800 px-2 tracking-tight">資產深度分析</h2>
                                 
-                                {/* --- [全新升級：財富成長趨勢動態雙圖表] --- */}
                                 <section className="glass-card p-6">
                                     <div className="flex justify-center mb-6">
                                         <div className="bg-slate-100/80 p-1 rounded-full flex gap-1 shadow-inner">
@@ -874,7 +884,6 @@
                                         <p className="text-[10px] font-black text-slate-400">每{trendPeriod === 'day' ? '日' : trendPeriod === 'month' ? '月' : '年'}趨勢</p>
                                         <div className="flex items-center gap-2">
                                             <p className="text-3xl font-black text-slate-800 tracking-tighter">${Math.round(trendData.lastCum).toLocaleString()}</p>
-                                            {/* 修正：台股配色，正為紅↑，負為綠↓ */}
                                             {trendData.lastDelta >= 0 && <span className="bg-red-100/60 text-red-700 px-2 py-0.5 rounded-full text-[9px] font-black">本{trendPeriod === 'day' ? '日' : trendPeriod === 'month' ? '月' : '年'} ↑</span>}
                                             {trendData.lastDelta < 0 && <span className="bg-green-100/60 text-green-700 px-2 py-0.5 rounded-full text-[9px] font-black">本{trendPeriod === 'day' ? '日' : trendPeriod === 'month' ? '月' : '年'} ↓</span>}
                                         </div>
@@ -886,7 +895,6 @@
                                     {/* 當期變化圖 */}
                                     <div className="space-y-1 mb-2">
                                         <p className="text-[10px] font-black text-slate-400">每{trendPeriod === 'day' ? '日' : trendPeriod === 'month' ? '月' : '年'}變化</p>
-                                        {/* 修正：台股配色，正為紅字 */}
                                         <p className={`text-2xl font-black tracking-tighter ${trendData.lastDelta >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                                             {trendData.lastDelta >= 0 ? '+' : ''}${Math.round(trendData.lastDelta).toLocaleString()}
                                         </p>
@@ -1010,10 +1018,10 @@
                                 <section className="space-y-5">
                                     <div className="flex justify-between items-center px-2"><h3 className="font-black text-theme text-[10px] uppercase tracking-widest transition-colors duration-500">證券券商系統</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新券商',Category:'券商',LinkedBank:'',DiscountRate:'100',MinFee:'20'},...data.settings]})} className="bg-theme-light text-theme px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all duration-500">+ 新增</button></div>
                                     {data.settings?.filter(s=>s.Category==='券商').map((s,idx)=>(
-                                        <div key={s.AccountName + idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
+                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
                                             <div className="absolute top-6 right-6 flex gap-1.5">
-                                                <button onClick={() => moveSetting(data.settings.indexOf(s), -1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往上移"><Icons.ChevronUp size={14}/></button>
-                                                <button onClick={() => moveSetting(data.settings.indexOf(s), 1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往下移"><Icons.ChevronDown size={14}/></button>
+                                                <button onClick={() => moveSetting(s, -1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往上移"><Icons.ChevronUp size={14}/></button>
+                                                <button onClick={() => moveSetting(s, 1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往下移"><Icons.ChevronDown size={14}/></button>
                                                 <button onClick={()=>setData({...data,settings:data.settings.filter(x=>x!==s)})} className="p-2 bg-red-50 text-red-400 rounded-xl active:scale-90 transition-all" title="刪除"><Icons.Trash2 size={14} /></button>
                                             </div>
                                             <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-theme border-b pb-1 w-full pr-32 bg-transparent outline-none text-xl focus:border-theme transition-colors duration-500" />
@@ -1030,10 +1038,10 @@
                                 <section className="space-y-5">
                                     <div className="flex justify-between items-center px-2"><h3 className="font-black text-slate-500 text-[10px] uppercase tracking-widest">銀行存款帳戶</h3><button onClick={()=>setData({...data,settings:[{AccountName:'新銀行',Category:'銀行',InterestRate:'0'},...data.settings]})} className="bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full text-[10px] font-black active:scale-95 transition-all duration-500">+ 新增</button></div>
                                     {data.settings?.filter(s=>s.Category==='銀行').map((s,idx)=>(
-                                        <div key={s.AccountName + idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
+                                        <div key={idx} className="glass-card p-7 space-y-4 relative shadow-sm border border-slate-100">
                                             <div className="absolute top-6 right-6 flex gap-1.5">
-                                                <button onClick={() => moveSetting(data.settings.indexOf(s), -1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往上移"><Icons.ChevronUp size={14}/></button>
-                                                <button onClick={() => moveSetting(data.settings.indexOf(s), 1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往下移"><Icons.ChevronDown size={14}/></button>
+                                                <button onClick={() => moveSetting(s, -1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往上移"><Icons.ChevronUp size={14}/></button>
+                                                <button onClick={() => moveSetting(s, 1)} className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90 transition-all hover:text-theme hover:bg-theme-light" title="往下移"><Icons.ChevronDown size={14}/></button>
                                                 <button onClick={()=>setData({...data,settings:data.settings.filter(x=>x!==s)})} className="p-2 bg-red-50 text-red-400 rounded-xl active:scale-90 transition-all" title="刪除"><Icons.Trash2 size={14} /></button>
                                             </div>
                                             <input type="text" value={s.AccountName} onChange={e=>handleUpdateSetting(data.settings.indexOf(s),'AccountName',e.target.value)} className="font-black text-slate-700 border-b pb-1 w-full pr-32 bg-transparent outline-none text-xl focus:border-slate-700" />
@@ -1058,10 +1066,19 @@
                                 <div className="w-14 h-1.5 bg-slate-100 rounded-full mx-auto mb-10" />
                                 <div className="flex justify-between items-start mb-8"><div><h2 className="text-3xl font-black text-slate-800 tracking-tight">{isEditMode?"修改紀錄":"新增交易"}</h2><p className="text-xs font-bold text-theme mt-1 uppercase tracking-widest transition-colors duration-500">{currentAccount}</p></div><button onClick={()=>setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition-all"><Icons.X /></button></div>
                                 <div className="space-y-7">
-                                    <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px]">
-                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'買入':'存入')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['買入','存入'].includes(formMode)?'bg-white shadow-sm text-theme':'text-slate-400'}`}>{currentCategory==='券商'?'買入':'存入'}</button>
-                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'賣出':'提領')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['賣出','提領'].includes(formMode)?'bg-white shadow-sm text-red-500':'text-slate-400'}`}>{currentCategory==='券商'?'賣出':'提領'}</button>
-                                        <button onClick={()=>setFormMode(currentCategory==='券商'?'除權息':'轉帳')} className={`flex-1 py-4 rounded-2xl font-black transition-all ${['除權息','轉帳'].includes(formMode)?'bg-white shadow-sm text-theme':'text-slate-400'}`}>{currentCategory==='券商'?'除權息':'轉帳'}</button>
+                                    <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[24px] overflow-x-auto no-scrollbar">
+                                        {(currentCategory === '券商' 
+                                            ? [ { label: '買入', val: '買入' }, { label: '賣出', val: '賣出' }, { label: '除權息', val: '除權息' }, { label: '存入', val: '存入' }, { label: '提領', val: '提領' } ]
+                                            : [ { label: '存入', val: '存入' }, { label: '提領', val: '提領' }, { label: '轉帳', val: '轉帳' }, { label: '買黃金/外幣', val: '買入' }, { label: '賣黃金/外幣', val: '賣出' }, { label: '利息', val: '利息' } ]
+                                        ).map(m => (
+                                            <button 
+                                                key={m.label} 
+                                                onClick={() => setFormMode(m.val)} 
+                                                className={`px-4 py-3 rounded-2xl font-black transition-all whitespace-nowrap flex-shrink-0 ${formMode === m.val ? (['賣出','提領'].includes(m.val) ? 'bg-white shadow-sm text-red-500' : 'bg-white shadow-sm text-theme') : 'text-slate-400'}`}
+                                            >
+                                                {m.label}
+                                            </button>
+                                        ))}
                                     </div>
                                     <div className="space-y-5">
                                         {formMode === '轉帳' ? (
@@ -1074,17 +1091,22 @@
                                                 <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="股票代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-all duration-500" />
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-theme transition-colors duration-500">除息金額 ($)</label><input type="number" value={formData.dividendCash} onChange={e=>setFormData({...formData,dividendCash:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
-                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (股)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
+                                                    <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center text-green-600">除權股數 (單位)</label><input type="number" value={formData.dividendStock} onChange={e=>setFormData({...formData,dividendStock:e.target.value})} placeholder="0" className="w-full bg-transparent text-center font-black outline-none" /></div>
                                                 </div>
+                                            </>
+                                        ) : formMode === '利息' ? (
+                                            <>
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="資產代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-colors duration-500" />
+                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="領取總額 (含退稅)" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-theme outline-none transition-colors duration-500" />
                                             </>
                                         ) : (
                                             <>
-                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory==='券商'?"股票代號":"摘要備註"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-colors duration-500" />
+                                                <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder={currentCategory === '券商' ? "股票代號" : "資產代號 (如: 黃金)"} className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-colors duration-500" />
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">數量</label><input type="number" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})} placeholder="數量" className="w-full bg-transparent font-black outline-none" /></div>
                                                     <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1">單價/總額</label><input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="金額" className="w-full bg-transparent font-black outline-none" /></div>
                                                 </div>
-                                                {currentCategory === '券商' && (
+                                                {(formMode === '買入' || formMode === '賣出') && (
                                                     <>
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div className="bg-slate-50 p-4 rounded-3xl border-2 border-transparent focus-within:border-theme transition-colors duration-500"><label className="text-[9px] font-black opacity-30 uppercase block mb-1 text-center">手續費</label><input type="number" value={formData.fee} onChange={e=>setFormData({...formData,fee:e.target.value})} className="w-full bg-transparent text-center font-black outline-none" /></div>

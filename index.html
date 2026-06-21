@@ -1107,7 +1107,7 @@
                                         ) : formMode === '利息' ? (
                                             <>
                                                 <input type="text" value={formData.symbol} onChange={e=>setFormData({...formData,symbol:e.target.value})} placeholder="資產代號" className="w-full bg-slate-50 p-5 rounded-3xl font-black outline-none border-2 border-transparent focus:border-theme transition-colors duration-500" />
-                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="領取總額 (含退稅)" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-theme outline-none transition-colors duration-500" />
+                                                <input type="number" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})} placeholder="領取總額" className="w-full bg-slate-50 p-5 rounded-3xl font-black text-xl border-2 border-transparent focus:border-theme outline-none transition-colors duration-500" />
                                             </>
                                         ) : (
                                             <>
